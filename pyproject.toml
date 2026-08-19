@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quantized-gemm-error"
+version = "0.1.0"
+description = "Numerical research into quantized GEMM error behavior"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { text = "MIT" }
+authors = [{ name = "nanaysonic" }]
+
+# Core dependencies. Torch is intentionally excluded here -- it is only
+# needed (CPU-only) starting Phase 4.4 and will be added as an explicit
+# extra at that point, not bundled into the default install.
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "ml_dtypes>=0.3",
+    "matplotlib>=3.8",
+    "pandas>=2.1",
+    "pyarrow>=14.0",
+    "pytest>=7.4",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# Lint tooling isn't part of the numerical/dependency list the project
+# cares about reproducing exactly, so it's kept separate from the core
+# pinned set in requirements.lock.
+dev = ["ruff>=0.5", "pyyaml>=6.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qgemm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

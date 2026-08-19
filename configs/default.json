@@ -1,0 +1,5 @@
+{
+  "seed": 0,
+  "sizes": [16, 32, 64, 128],
+  "dtypes": ["float32", "float64"]
+}

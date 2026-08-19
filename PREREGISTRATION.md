@@ -1,0 +1,543 @@
+# Preregistration — Numerical Error Analysis of Quantized GEMM
+
+Recorded before running the confirmatory sweeps referenced in the paper.
+Any deviation from this document made after data collection starts must be
+logged under "Amendments and deviations" below, as a dated and justified
+entry — never silently edited in above.
+
+- **Version:** 1 (git tag `preregistration-v1`)
+- **Written:** 2026-08-19
+- **Deadline:** see README.md (August 29, 2026, 23:59 AoE)
+- **Status of data collection:** not started as of 2026-08-19.
+
+### Editorial conventions used in this document
+
+- Unmarked prose in §1–§5 is the author's own commitment.
+- Blocks marked **[R-added]** were inserted during the adversarial review of
+  2026-08-19 to close a gap that made an author commitment ambiguous or
+  undefined. They add decision procedure, not scientific claims. Each is
+  cross-referenced to a numbered finding in §9.
+- Blocks marked **⚑ INFERRED** encode intent that the reviewer inferred from
+  surrounding context rather than from an explicit statement. The author must
+  confirm or overwrite each of these before the first confirmatory run.
+- Items marked **⚠ OPEN** are commitments that are *structurally* fixed here
+  but whose *value* is deliberately not yet chosen. They must be closed by a
+  dated amendment before the first confirmatory run. See §7.
+
+### Notation **[R-added, see R14]**
+
+- `ν` — degrees of freedom of the t-Student distribution from which GEMM
+  operands are drawn. **Smaller ν = heavier tails.** ν = ∞ is the Gaussian case.
+- `n` — the contraction (inner) dimension of the GEMM.
+- *block* — the microscaling block size, 16 or 32 elements.
+- *scale* — the dtype of the per-block scale factor, E4M3 or E8M0.
+- *cell* — one of the four (block, scale) combinations of the 2×2 factorial.
+
+## 1. Primary Hypothesis (H1)
+
+There exists a critical value ν* such that, for ν < ν*, the ratio
+empirical_error / theoretical_bound exceeds 1, and ν*(block=32) > ν*(block=16).
+That is: the block-32 configuration breaks under lighter-tailed distributions
+than block-16 (block-32 is the more fragile configuration).
+
+Because only 8 discrete ν values are tested, ν* is reported as an interval
+between the largest ν where the bound **breaks** and the smallest ν where it
+**holds**, not as a point estimate.
+<!-- [R-added, R1] The original draft read "between the largest ν where the
+bound holds and the smallest ν where it breaks", which brackets the wrong
+side of the crossing given H1's own direction (breakage occurs *below* ν*).
+Corrected to match H1. This is an internal-consistency fix, not a change of
+commitment. -->
+
+### 1.1 Localizing ν* on a discrete grid, including censored cases **[R-added, see R2, R3]**
+
+Let the tested grid be ν₁ < ν₂ < … < ν₈, and for each cell *c* let
+`B(c) ⊆ {ν₁…ν₈}` be the set of tested ν at which the bound is broken by the
+criterion in §3, evaluated at the primary n (§4.0).
+
+Define the **fragility rank** `r(c) ∈ {0, 1, …, 8}`:
+
+    r(c) = 0                       if B(c) = ∅
+    r(c) = k  where ν_k = max B(c) otherwise
+
+and read ν* off it as the open interval
+
+    ν*(c) ∈ (ν_r, ν_{r+1}),   with the conventions  ν₀ := 0  and  ν₉ := ∞.
+
+This single integer handles every case, including the two censored ones, with
+no post-hoc judgement:
+
+| Outcome | r | Reported as |
+|---|---|---|
+| Bound never breaks in range | 0 | ν* < ν₁ — **censored below** |
+| Bound breaks at some interior ν | 1–7 | ν* ∈ (ν_r, ν_{r+1}) |
+| Bound breaks at every tested ν | 8 | ν* > ν₈ — **censored above** |
+
+Censored cells are *not* undefined and are *not* dropped: rank 0 and rank 8 are
+ordinary values of r and enter the P1 comparison exactly like any other rank.
+A cell censored below is ordered *below* every uncensored cell; a cell censored
+above is ordered *above* every uncensored cell. The H1/H0 comparison therefore
+remains defined for all 2⁴ combinations of censoring across the four cells.
+
+**Monotonicity precondition.** ν* as a "crossing" presumes that breakage is a
+down-set in ν: if the bound breaks at ν_k it also breaks at every ν_j < ν_k.
+This is checked, not assumed. If for any cell `B(c)` is not a down-set — i.e.
+there exist ν_i < ν_j with ν_i ∉ B(c) and ν_j ∈ B(c) — then that cell is
+flagged **non-monotone** in the results table, r(c) is still computed by the
+rule above (the definition never becomes ambiguous), but the P1 result is
+reported as **inconclusive-exploratory** rather than as confirmatory evidence
+for or against H1, and the non-monotone pattern is shown in full. Deciding
+after the fact which of several crossings is "the real one" is exactly the
+degree of freedom this rule exists to remove.
+
+## 2. Null Hypothesis (H0)
+
+The ratio stays ≤ 1 for all tested ν in both block sizes, or ν*(32) ≈ ν*(16)
+(no detectable difference in fragility between block sizes).
+
+### 2.1 Making "≈" and the outcome space exhaustive **[R-added, see R3, R4]**
+
+"≈" is operationalized as **equal fragility rank**: ν*(32) ≈ ν*(16) iff
+r(block32, s) = r(block16, s), i.e. the two ν* intervals are the same grid
+cell. Any difference of one or more grid steps counts as a detected difference.
+The 2×2 design gives two block-size contrasts, one per scale format s ∈ {E4M3,
+E8M0}, and the verdict is **conjunctive** across them:
+
+| Pattern across both scale formats s | Verdict |
+|---|---|
+| r(32,s) > r(16,s) for both s | **H1 supported** |
+| r(32,s) = r(16,s) for both s | **H0** — no detectable difference |
+| r(32,s) < r(16,s) for both s | **H1 rejected — directional reversal** (block-16 is the more fragile configuration) |
+| sign differs across s, or one contrast is 0 | **Interaction-dominated / inconclusive** — reported as such; not counted as support for H1 |
+
+The conjunctive rule is what stops the block-size effect being claimed from
+whichever scale-format arm happens to cooperate. The reversal row is stated
+explicitly because it is a scientifically important outcome that contradicts
+the NVIDIA-gap narrative motivating this study, and it must not be
+re-described after the fact as "a null result" or moved into §5.
+
+## 3. Operational Definition of "Bound Broken" (🧠7)
+
+The bound is considered broken at (format, ν, n) if the lower bound of the
+95% bootstrap CI of the median of the ratio exceeds 1.0.
+- Median, not mean — heavy-tailed inputs may lack finite moments.
+- CI lower bound, not point estimate — the conservative choice.
+Fixed now; not revisited after looking at the data.
+
+This presupposes a working definition of theoretical_bound(n). Pending formal
+resolution in Step 2.3 (🧠1), the provisional definition is:
+
+  u_eff(format, block, ν) := median (and, as an indicative secondary
+  statistic, p99) of the per-element relative quantization error,
+  measured empirically for that configuration.
+  bound(n) = c · √n · u_eff
+
+### 3.1 The bound is PROVISIONAL — status and consequences **[R-added, see R5]**
+
+The definition above is a **placeholder that stands in for unresolved work**,
+not a settled result. 🧠1 — what a theoretical backward-error bound even means
+for block-scaled formats, where the scale factor is data-dependent and shared
+across a block — is scheduled for Step 2.3 and is *not* resolved by this
+document. Consequences, committed to now:
+
+1. If 🧠1 resolves to a different bound, the H1 test changes with it. That
+   substitution must be filed as a dated amendment in §8 **before** the
+   confirmatory analysis is re-run, and both the provisional-bound and
+   resolved-bound results must be reported side by side in the paper.
+2. This provisional bound is **not** claimed as a theoretical contribution of
+   the paper. It is an empirical yardstick.
+3. Because `u_eff` is itself indexed by ν, both sides of the ratio move with ν.
+   H1 as tested here is therefore a statement about whether the **√n growth
+   law** survives heavy tails, *not* about whether heavy tails increase
+   absolute error. The paper must say this in those words. See R6 for the
+   reviewer's unresolved objection to this construction.
+
+### 3.2 Estimation details that would otherwise be free parameters **[R-added, see R7, R8]**
+
+- **c is fixed a priori at c = 1** for all confirmatory analysis. ⚑ INFERRED
+  from the project's framing of the comparator as "the probabilistic √n·u
+  bound", whose classical form has c = 1. Any ĉ fitted from data is a
+  descriptive, exploratory quantity only (§5(b)) and may never be substituted
+  back into the confirmatory ratio: a bound whose constant is fitted to the
+  same data it is tested against cannot be falsified by that data.
+- **`u_eff` is estimated on an independent calibration sample** — separate
+  seeds from the confirmatory sweep, drawn from the same configuration — and
+  is frozen and tabulated before the confirmatory ratios are computed. Reusing
+  the confirmatory sample to calibrate the denominator would partially
+  self-normalize the ratio.
+- **Bootstrap:** percentile method, B = 10 000 resamples, RNG seeded
+  explicitly per the repo's Generator convention. The **resampling unit is the
+  independent trial (seed)**, never the individual matrix element: elements
+  within a block share a scale factor and are not independent, so an
+  element-level bootstrap would give anticonservative intervals and inflate
+  the break rate. ⚑ INFERRED (method and B are conventional defaults; the
+  resampling unit follows from the block-scaling structure).
+- `qgemm.stats.mean_ci95` is a normal-approximation CI of the **mean** and is
+  therefore *not* the estimator specified here. A median bootstrap must be
+  implemented before data collection. See R15.
+
+## 4. Primary vs. Exploratory Comparisons
+
+Primary (max 3, these are what answer H1):
+- P1 — ν*(block 16) vs ν*(block 32), scale format held constant.
+  [block-size causal effect]
+- P2 — ν*(scale E4M3) vs ν*(scale E8M0), block size held constant.
+  [scale-format causal effect]
+- P3 — MXFP4 preset (block32+E8M0) vs NVFP4 preset (block16+E4M3),
+  decomposed via P1 + P2 + interaction. [practical bottom line, ties to
+  NVIDIA's reported 36%-more-tokens gap]
+
+No multiple-comparison correction is applied across the 8 ν levels within
+each of P1–P3: ν*-localization is treated as curve-crossing detection along
+a single ordered axis, not as a family of independent hypothesis tests.
+
+Everything else — hypothetical blocks 8/64, RHT on/off, rounding mode,
+accumulation precision, real activations — is exploratory and reported as
+such, never as evidence for or against H1.
+
+### 4.0 ν* is defined at a single primary n **[R-added, see R9]**
+
+The §3 break criterion is indexed by (format, ν, n), but ν* is not. The
+aggregation is fixed here: **ν* is computed at one primary contraction
+dimension, `n_primary`** (⚠ OPEN — value to be declared in §7 and frozen in
+the sweep config before the first confirmatory run). All other n in the grid
+are **robustness checks**: they are reported as a sensitivity table alongside
+the primary result, and disagreement between them and n_primary is disclosed,
+but they never replace n_primary in the H1 verdict. Without this, "does the
+bound break at this ν" would have as many answers as there are n, and the
+choice among them would be made after seeing the data.
+
+### 4.1 Which comparisons actually bear on H1 **[R-added, see R10]**
+
+H1, as stated in §1, is a claim about **block size only**. Labelling P1–P3
+uniformly as "primary" overstates the evidentiary role of P2 and P3:
+
+- **P1 is the sole confirmatory test of H1**, evaluated by the conjunctive
+  rule in §2.1.
+- **P2 is a design-validity comparison**, not a test of H1. Its role is to
+  establish that scale format is a separable factor, which is what licenses
+  the causal reading of P1 in the 2×2. It is prespecified and reported
+  whatever it shows.
+- **P3 is a derived summary**, not an independent test: it is a function of
+  P1, P2 and their interaction, and is reported for the practical
+  MXFP4-vs-NVFP4 bottom line. It cannot furnish support for H1 that P1 did
+  not already furnish.
+
+This relabelling changes no comparison, statistic or threshold; it fixes which
+of them is allowed to move the H1 verdict.
+
+### 4.2 Scope of the no-correction stance **[R-added, see R11]**
+
+The author's stated argument — that ν*-localization along a single ordered ν
+axis is a curve-crossing problem rather than a family of independent tests —
+is accepted as sound *for the 8 ν levels within one cell*, which is the scope
+it was written for. Extending it to the rest of the multiplicity in this
+design, with the author's own logic:
+
+- **Across the 4 cells:** no correction. The cells are the arms of a factorial
+  design, not competing hypotheses; every cell is reported regardless of
+  outcome, and the conjunctive rule in §2.1 already requires *both* block-size
+  contrasts to agree, which is stricter than either arm alone.
+- **Across P1–P3:** no correction, because per §4.1 only P1 can move the H1
+  verdict; P2 and P3 are descriptive and are reported unconditionally.
+- **Across n:** no correction, because per §4.0 only n_primary enters the
+  verdict.
+
+⚑ INFERRED: the extensions above are the reviewer's reading of the author's
+stated rationale, not the author's words. **The residual risk is stated
+plainly and is not fully mitigated:** because r(c) is defined by the *largest*
+broken ν, a single false-positive break at a high ν raises r(c) directly, so
+the no-correction stance is not error-symmetric here — it biases ν* upward
+rather than merely widening it. The monotonicity check in §1.1 is the only
+safeguard against an isolated spurious break, and it is a flag, not a test.
+The number of CIs computed is fixed in advance by the frozen grid and is
+reported in the paper. See R11 for the option the author may wish to take
+instead.
+
+## 5. Contingency: Null Result (🧠8)
+
+If the ratio stays ≤ 1 for all tested ν in both block sizes, the paper
+reframes as:
+"Empirical characterization of the effective unit roundoff and scaling
+regime for microscaling formats under heavy-tailed inputs."
+Contributions in that case: (a) the u_eff table by format/block/ν —
+unpublished elsewhere; (b) the empirical constant c; (c) evidence that
+classical probabilistic bounds hold even in the adversarial regime — a
+clean, useful verification result; (d) the scale-invariance analysis.
+
+### 5.1 Contingencies for the outcomes §5 does not cover **[R-added, see R4, R12]**
+
+- **Directional reversal** (row 3 of §2.1): reported as H1 rejected, in the
+  abstract and in the title-level claim. It is not reframed as a null result.
+- **All cells censored above** (bound breaks even at the lightest-tailed ν
+  tested, r = 8 everywhere): H1 untestable on this grid, because the ν range
+  was mis-specified. Reported as such, with the finding that the bound fails
+  even in the near-Gaussian regime — a strong result in its own right, but
+  labelled a grid mis-specification, not an H1 confirmation.
+- **Interaction-dominated** (row 4 of §2.1): reported as an interaction
+  between block size and scale format, with P3 as the practical summary and no
+  H1 verdict.
+- On §5(c): the provisional bound of §3 is **not** the classical probabilistic
+  bound — it substitutes an empirically measured `u_eff` for the format's
+  nominal unit roundoff. If the null contingency fires, contribution (c) must
+  be worded as "the √n scaling law holds with an empirically calibrated
+  u_eff", not as a verification of the classical bound. See R13.
+- On §5(d): the scale-invariance analysis is listed as a contribution but has
+  no analysis plan anywhere in this document. ⚠ OPEN — either specify it in
+  §7 or demote it to exploratory. See R16.
+
+## 6. Sweep grid, sample size, stopping rule **[R-added, see R14]**
+
+The draft reviewed on 2026-08-19 dropped these sections, which the earlier
+skeleton carried. A preregistration that does not freeze the grid does not
+bind: ν levels or n values could be added later without any of it counting as
+a deviation.
+
+- **Frozen grid.** The confirmatory grid is the JSON config under `configs/`
+  whose sha256 is recorded in §7 once written. Per repo convention, every
+  results file is `sweep_{sha256(config)[:12]}.parquet` with the config saved
+  alongside, so the frozen grid is verifiable from the artifacts. Any run
+  whose config hash differs from the recorded one is exploratory by
+  construction. `configs/default.json` is a leftover placeholder and is **not**
+  the confirmatory config.
+- **Sample size.** Fixed number of independent trials (seeds) per cell,
+  declared in the config and never extended after inspecting results.
+  ⚠ OPEN — value in §7.
+- **Stopping rule.** Data collection stops when the frozen grid has been run to
+  its declared trial count. There is no interim look at the ratio, and no
+  optional stopping. If a run fails for infrastructure reasons it is re-run at
+  the same seeds; a re-run is not an additional sample.
+
+## 7. Open items — must be closed by a dated amendment before the first confirmatory run
+
+These are structurally committed above but numerically unchosen. Each is a
+scientific decision that belongs to the author, and each is listed here rather
+than filled in by the reviewer.
+
+1. **⚠ The 8 ν values** ν₁ … ν₈, and their range. The entire censoring
+   analysis in §1.1 is relative to this grid.
+2. **⚠ `n_primary`**, plus the full list of n used as robustness checks (§4.0).
+3. **⚠ The primary error metric** — "empirical_error" is never operationally
+   defined. The project studies *backward* error, while `qgemm.metrics`
+   currently exposes forward-error metrics (`relative_error`, `rms_error`, …)
+   and `qgemm.bounds.gamma_n` is a backward-error growth factor. One metric
+   must be named as primary, and it must be commensurable with the
+   denominator in §3. See R17.
+4. **⚠ Trials (seeds) per cell**, and the separate seed range for the `u_eff`
+   calibration sample (§3.2).
+5. **⚠ The role of FP8** — reference baseline outside the 2×2, or part of the
+   primary comparisons. The 2×2 factorial as described covers only the FP4
+   microscaling family.
+6. **⚠ The scale-invariance analysis** (§5(d)) — specify or demote.
+7. **⚠ Confirmatory config path and sha256** (§6).
+
+Until items 1–4 are closed, no run may be labelled confirmatory.
+
+## 8. Amendments and deviations from this preregistration
+
+Append-only. Every entry is dated, states what changed, and states why. Never
+edit §1–§7 in place; the tagged commit `preregistration-v1` is the reference
+version and any later state is diffable against it.
+
+| Date | Section | Change | Justification | Pre- or post-data |
+|---|---|---|---|---|
+| — | — | None yet | — | — |
+
+## 9. Adversarial Review Notes (2026-08-19)
+
+Review conducted from the perspective of a skeptical reviewer for a
+numerical-analysis workshop, against the author's draft of 2026-08-19, before
+any data collection. Every issue found is listed, including those fixed above,
+so the audit trail is visible. Severity: **[blocking]** would undermine the
+confirmatory claim if left as-is; **[major]** leaves a live researcher degree
+of freedom; **[minor]** is clarity or completeness.
+
+**R1 [major] — the ν* bracket was stated on the wrong side of the crossing.**
+§1 said ν* is the interval "between the largest ν where the bound holds and the
+smallest ν where it breaks". Under H1 the bound breaks *below* ν*, so under a
+clean step the largest ν where it holds is ν₈ and the smallest where it breaks
+is ν₁ — the stated bracket is the entire tested range, which is not what was
+meant. *Fixed*: bracket direction corrected in §1 to match H1.
+
+**R2 [blocking] — ν* was undefined when the bound never breaks.** The draft
+gave no rule for a cell where the bound holds at every tested ν, or breaks at
+every tested ν. In the first case ν* does not exist in the tested range; in the
+second it lies above it. Since H1 is the *comparison* ν*(32) > ν*(16), a single
+censored cell made the H1/H0 comparison undefined — and, worse, made it
+undefined precisely in the scientifically interesting asymmetric case where one
+block size breaks and the other never does. *Fixed*: §1.1 introduces the
+fragility rank r ∈ {0…8}, which is total, censoring-aware, and computed by a
+rule that cannot be adjusted after seeing the data. Censored cells order
+correctly against uncensored ones, so every combination of censoring yields a
+defined verdict.
+
+**R3 [blocking] — ν* presupposed monotone breakage; 8 noisy levels need not
+comply.** With per-level bootstrap decisions, "breaks / holds" can interleave
+along ν. The draft's definition of ν* is only coherent for a single crossing,
+so an interleaved pattern would have forced a post-hoc choice of which crossing
+counts — a large and invisible degree of freedom. *Fixed*: §1.1 makes r
+well-defined regardless, adds an explicit down-set monotonicity check, and
+prespecifies that non-monotone cells are downgraded to
+inconclusive-exploratory rather than adjudicated after the fact.
+
+**R4 [blocking] — H1 and H0 were neither exhaustive nor mutually exclusive.**
+The two hypotheses left the directional-reversal outcome — block-16 more
+fragile than block-32 — with nowhere to land. That outcome is not H0 (there
+*is* a detectable difference) and not H1 (the ordering is inverted), and it is
+the outcome that would most sharply contradict the motivating NVIDIA-gap
+narrative. Left unhandled, the path of least resistance after seeing such data
+is to describe it as "no support for H1" and fall back on the §5 null
+reframing, which would hide a positive finding of the opposite sign. *Fixed*:
+§2.1 enumerates the full outcome space; §5.1 commits to reporting a reversal as
+a reversal, in the abstract.
+
+**R5 [blocking] — the provisional bound was flagged, but its consequences were
+not.** Credit where due: the draft *did* mark the `u_eff` / `c·√n·u_eff`
+construction as pending 🧠1 rather than stating it as settled, which is more
+than most preregistrations manage. What was missing is what follows from that:
+that resolving 🧠1 changes the H1 test itself and therefore requires a
+pre-analysis amendment; that the provisional bound is not a theoretical
+contribution; and that §5(c)'s claim about "classical probabilistic bounds"
+does not follow from it (see R13). *Fixed*: §3.1. 🧠1 itself is **not**
+resolved here — that remains Step 2.3 and the author's work.
+
+**R6 [major, NOT fixed — author's call] — a ν-indexed `u_eff` partially defines
+away the effect H1 is looking for.** `u_eff(format, block, ν)` is measured
+empirically *at each ν*. Under heavy tails the per-element relative
+quantization error is dominated by the block absmax outlier, so `u_eff` grows
+as ν falls — which means the denominator inflates in exactly the regime where
+the numerator is expected to inflate. The bound therefore chases the data, and
+a reviewer will ask whether a null result is a real verification or an artifact
+of a self-adjusting yardstick. The construction is defensible if H1 is
+understood narrowly as "does the √n growth law survive heavy tails", which is
+what §3.1(3) now commits the paper to saying. An alternative worth considering
+— fixing `u_eff` at its Gaussian (ν = ∞) value so the denominator is
+ν-independent, and reporting the ν-indexed version as secondary — would test a
+stronger and more interesting claim. **Not changed**: this is 🧠1 territory and
+a genuine scientific choice, not a wording fix.
+
+**R7 [blocking] — a fitted constant `c` would make H1 unfalsifiable.** §3
+defines bound(n) = c·√n·u_eff without fixing c, while §5(b) lists "the
+empirical constant c" as a contribution — implying c is estimated from data. If
+c is estimated from the same data the ratio is tested on, the break criterion
+can be satisfied or defeated at will, and worse, a per-cell ĉ would make ν*
+non-comparable across cells, voiding P1. *Fixed*: §3.2 fixes c = 1 for all
+confirmatory analysis, marked ⚑ INFERRED from the project's own framing of the
+comparator as "the probabilistic √n·u bound"; any fitted ĉ is exploratory and
+descriptive only. **The author must confirm c = 1.**
+
+**R8 [major] — the bootstrap was underspecified, and its natural resampling
+unit is wrong.** The draft named "95% bootstrap CI of the median" but not the
+method, the number of resamples, the seeding, or — most consequentially — the
+resampling unit. Resampling matrix elements would be the obvious
+implementation and would be invalid: elements sharing a block share a scale
+factor, so they are not exchangeable, and element-level intervals would be too
+narrow, inflating the break rate and hence ν*. *Fixed*: §3.2 specifies
+percentile method, B = 10 000, explicit Generator seeding, and the independent
+trial as the resampling unit. Also fixed: `u_eff` must come from an independent
+calibration sample, otherwise the ratio is partly self-normalizing.
+
+**R9 [blocking] — the break criterion is indexed by n, but ν* is not.** §3
+decides breakage at (format, ν, n); §1 compares a single ν* per block size. No
+aggregation rule over n was given, so "does the bound break at this ν" had as
+many answers as there are n values in the grid, and the selection among them
+would necessarily happen after seeing results. *Fixed*: §4.0 designates a
+single `n_primary` for the verdict and demotes all other n to a disclosed
+sensitivity table. The *value* of n_primary is left open (§7.2) — choosing it
+is the author's scientific decision, but it must be chosen before data.
+
+**R10 [major] — "primary (max 3)" mislabels the evidentiary role of P2 and
+P3.** H1 concerns block size only, so P2 (scale format) does not bear on H1 at
+all — it is a design-validity check that licenses the causal reading of P1 —
+and P3 is explicitly defined as a decomposition of P1 + P2 + interaction, i.e.
+a derived quantity, not an independent test. Presenting all three as
+co-equal "primary" comparisons invites the paper to draw H1 support from
+whichever of the three cooperates, and quietly makes the count four (P1, P2,
+interaction, P3) rather than three. *Fixed*: §4.1 designates P1 as the sole
+confirmatory test of H1 and relabels P2 and P3 without changing any statistic
+or threshold. Additionally, P1 as written ("scale format held constant") does
+not say *at which* value — with two scale formats there are two P1 contrasts,
+and picking the agreeable one is a live degree of freedom. *Fixed* by the
+conjunctive rule in §2.1: both arms must agree.
+
+**R11 [major] — the no-correction stance has a real argument, but it is scoped
+narrower than the multiplicity it faces, and the residual bias is
+asymmetric.** The draft's justification is genuine, not an assertion:
+curve-crossing detection along a single ordered axis is not a family of
+independent tests, and that is a sound argument for the 8 ν levels within one
+cell. It does not, as written, address multiplicity across the 4 cells, across
+P1–P3, or across n. More importantly, the standard "no correction just widens
+the uncertainty" defence does not hold here: because r(c) is the index of the
+*largest* broken ν, one false-positive break at a high ν shifts ν* upward
+directly. With 8 ν × 4 cells × |n| intervals at 95%, at least one spurious
+break is likely. *Partially fixed*: §4.2 extends the author's own rationale to
+each remaining axis using the design's own structure (all cells reported; only
+P1 moves the verdict; only n_primary counts) and states the residual bias
+plainly instead of concealing it. **Not fixed, author's call:** the cheap
+remedy is to require a break to be confirmed at two adjacent ν levels before it
+raises r, or to lower the per-interval level. Both change the operating
+characteristics of the primary test, so the reviewer did not impose either.
+
+**R12 [major] — §5 covered one of the four possible outcomes.** The null
+contingency was well-designed and specific — it is a genuine strength of the
+draft that a null result already has a paper — but reversal, all-censored-above
+and interaction-dominated outcomes had no prewritten home, which is where
+post-hoc reframing usually enters. *Fixed*: §5.1.
+
+**R13 [major] — §5(c) claims more than the provisional bound can deliver.**
+"Evidence that classical probabilistic bounds hold even in the adversarial
+regime" would be a strong verification result, but the quantity actually tested
+substitutes an empirically measured `u_eff` for the format's nominal unit
+roundoff. Holding against a calibrated yardstick is not the same claim as
+holding against the classical bound. *Fixed*: §5.1 constrains the wording that
+contribution (c) may use. Related to R6.
+
+**R14 [major] — the grid, sample size and stopping rule were absent, and ν was
+never defined.** The earlier skeleton carried "Sweep grid / sample size" and
+"Stopping rule" sections; the draft dropped them. Without a frozen grid the
+document does not bind — ν levels or n values could be appended later with no
+deviation logged — and without a stopping rule, optional stopping is
+unconstrained. The draft also never states that ν is the t-Student degrees of
+freedom or that smaller ν means heavier tails, which the direction of H1
+depends on. *Fixed*: §6 restores all three and ties the frozen grid to the
+repo's existing `sweep_{sha256(config)[:12]}` convention, which makes the grid
+verifiable from the artifacts rather than merely asserted; notation section
+added. Values left open in §7.
+
+**R15 [minor] — the specified estimator does not yet exist in the codebase.**
+`qgemm.stats` currently provides only `mean_ci95`, a normal-approximation CI of
+the *mean* — the estimator §3 explicitly rejects. `qgemm.distributions`
+provides Gaussian and uniform samplers but no t-Student sampler, so the ν axis
+is not yet implementable either. Not a defect in the preregistration, but both
+must be implemented and tested before data collection, and the temptation to
+fall back on `mean_ci95` because it is what exists must be resisted. *Noted in
+§3.2.*
+
+**R16 [minor] — a claimed contribution with no analysis plan.** §5(d) lists
+"the scale-invariance analysis" among the null-result contributions, but no
+such analysis is defined anywhere in the document. *Flagged*: §7.6 — specify
+or demote.
+
+**R17 [blocking] — "empirical_error" is never operationally defined.** The
+numerator of the central ratio has no definition. The project studies backward
+error; `qgemm.metrics` exposes forward-error metrics; `qgemm.bounds.gamma_n` is
+a backward-error growth factor. Which quantity is measured, and whether it is
+commensurable with `c·√n·u_eff`, decides what H1 even means — and leaving it
+open until after the sweeps would let the metric be chosen to fit the result.
+*Flagged, not fixed*: §7.3. Naming the primary metric is the author's
+scientific decision; the reviewer will not choose it. This item alone blocks
+labelling any run confirmatory.
+
+### Reviewer's summary judgement
+
+The draft's strengths are real and worth stating: the break criterion is
+conservative and was fixed before data (§3), the null-result contingency is
+concrete rather than aspirational (§5), the no-correction stance came with an
+actual argument rather than an assertion (§4), and the provisional status of
+the bound was already flagged rather than being passed off as settled. The
+serious problems were all of one kind — **quantities that the document uses as
+if they were defined but never defines**: ν* under censoring (R2), ν* under
+non-monotonicity (R3), the constant c (R7), the aggregation over n (R9), and
+the numerator itself (R17). Four of those are now closed by prespecified rules;
+R17 and the §7 items remain with the author, and no run may be called
+confirmatory until they are closed by a dated amendment.

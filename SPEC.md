@@ -556,9 +556,118 @@ than a tolerance.
 
 ## GEMM under quantization (`qgemm.gemm`)
 
-TBD -- how operands are quantized, what precision accumulation happens
-in, and how `quantized_matmul` composes `formats` / `blocks` /
-`rounding` / `transforms`.
+### Quantized GEMM pipeline
+
+`qgemm(A, B, config)` is the study's main measurement instrument: it computes
+an approximation of `A @ B` in which the *operands* have gone through a
+block-scaled low-precision format, and returns float64. All variation lives in
+`GemmConfig`; the function itself has no free parameters.
+
+**The four steps.** For `A` of shape `(M, K)` and `B` of shape `(K, N)`:
+
+1. **Transform** (optional, `config.rht`). One random Hadamard transform
+   applied per block along the **contraction dimension** `K`, with the *same*
+   `H'` on both operands. `rht_operands` owns this and the transposes it needs.
+2. **Quantize** both operands with `quantize_blocked`, blocked along the
+   contraction dimension, using `config`'s block size, scale format, global
+   scale, element format and rounding mode. Skipped when
+   `config.quantize` is False.
+3. **Multiply the reconstructions** -- the dequantized float64 values, not the
+   codes -- in the precision named by `config.accum`.
+4. **Return**. The RHT is *not* inverted; see below.
+
+**The contraction axis is the whole correctness question.** Both
+`apply_rht` and `quantize_blocked` operate on the **last** axis. For `A` the
+last axis already *is* `K`; for `B` the last axis is `N`, so `B` must be
+transposed before either call and transposed back after. Getting this wrong is
+a silent bug, not a crash: with `K == N` the wrong axis raises nothing and
+returns an array of the right shape that measures a different quantity. Both
+axis choices are pinned in `tests/test_gemm.py` against references that spell
+the transposes out, plus a test that the wrong axis genuinely disagrees (so the
+reference cannot be trivially satisfied).
+
+**Why the RHT is not inverted.** `H'` is orthogonal, so it cancels inside every
+inner product the GEMM forms:
+
+```
+(H'a).(H'b) = a.(H'.T H' b) = a.b
+```
+
+That is why it must hit *both* operands along the *same* axis, and why nothing
+has to be undone afterwards. With quantization off, `qgemm` with the RHT on
+returns the exact product to float64 rounding -- the transform changes nothing
+about the product itself, only what quantization subsequently does to it, by
+spreading each block's energy so a lone outlier no longer sets the block scale.
+
+### Accumulation modes
+
+| `accum` | how | role |
+|---------|-----|------|
+| `"exact"` | `np.matmul` in float64 on the reconstructions | **primary route** |
+| `"bf16"`  | explicit loop over `K`, accumulator rounded to bfloat16 after each partial sum | secondary ablation |
+
+**`"exact"` is primary because it isolates input-quantization error.** A
+low-precision GEMM has two independent error sources: the operands snapped onto
+a coarse grid, and the partial sums rounded in a narrow accumulator. They
+compose, and one number measured with both active cannot be attributed to
+either -- a downstream result would be unattributable. Under `"exact"` the only
+approximation in the pipeline is step 2, so the residual
+`qgemm(A, B, config) - A @ B` *is* the input-quantization error. `"bf16"` turns
+the second source on deliberately to measure what it adds; it is never mixed
+into a headline result.
+
+The bf16 loop rounds only the accumulator: term `k` is formed in float64 as an
+outer product and added to an accumulator that is immediately rounded back onto
+the bfloat16 grid (RTNE, via `ml_dtypes.bfloat16`).
+
+Note that "worse than exact" is sharp only against the exact route's own
+output, which is by construction the exact product of the *same* quantized
+operands, so any deviation from it is accumulation error alone. Measured
+against the true `A @ B` the ordering is not guaranteed at small `K`: the two
+errors add in quadrature and at `K = 256` the FP4 quantization error is roughly
+twenty times the bf16 accumulation error, so which route lands closer is
+decided by luck. Accumulation error grows with `K` and quantization error does
+not, and by `K = 4096` the ordering is solid.
+
+### Performance constraint
+
+**The exact route must complete a 512x512x512 GEMM, quantization and RHT
+included, in under one second**, asserted (not logged) in
+`tests/test_gemm.py`. This is load-bearing: the sweep calls this function once
+per (shape, format, block size, rounding mode, seed) cell, thousands of times,
+and a per-block Python loop anywhere in the path would move the main experiment
+from minutes to hours. Every step of the exact route is a whole-array NumPy
+operation for that reason. Measured: 0.047 s. The `"bf16"` route is exempt --
+it is an ablation over a handful of cells and loops over `K` by construction.
+
+### `GemmConfig`
+
+A frozen dataclass of plain scalars, so it is hashable and
+`dataclasses.asdict`-able and therefore feeds the sweep's
+`sweep_{sha256(config)[:12]}` result-naming convention directly.
+
+| field | default | meaning |
+|-------|---------|---------|
+| `quantize` | `True` | whether step 2 runs |
+| `block_size`, `scale_format`, `use_global_scale`, `element_format`, `round_mode` | MXFP4 | passed through to `quantize_blocked` |
+| `rht` | `False` | whether step 1 runs |
+| `rht_block_size` | `block_size` | transform block size; separable from the quantizer's |
+| `accum` | `"exact"` | accumulation precision |
+| `seed` | `0` | seeds every random draw in the pipeline |
+
+The defaults are MXFP4, exact accumulation, no RHT -- the study's baseline
+cell. NVFP4 is `GemmConfig(block_size=16, scale_format="e4m3",
+use_global_scale=True)`.
+
+`seed` is an `int` rather than a `numpy.random.Generator` so that a config
+stays serialisable. It is expanded into **three independent streams** -- the
+RHT signs, and stochastic rounding for `A` and for `B` separately. Independent
+rather than shared, for two reasons: turning the RHT on must not shift the
+rounding draws (a config should differ from another only in the ways it says it
+does), and `A` and `B` must not share a rounding draw, since correlated
+rounding errors do not cancel in an inner product the way independent ones do.
+Generators are built from the seed and passed explicitly; NumPy's global RNG is
+never touched.
 
 ## Error metrics (`qgemm.metrics`)
 

@@ -165,10 +165,67 @@ TBD -- the full list of block sizes and axes considered (e.g. per-tensor,
 per-row). Implemented so far: MXFP4 and NVFP4, which share E2M1 elements and
 differ only in how those elements are scaled.
 
+### One parametrized quantizer; MXFP4 and NVFP4 are presets of it
+
+Implemented: `quantize_blocked(x, block_size, scale_format,
+use_global_scale, element_format="e2m1", round_mode="rtne", rng=None)`,
+with `block_scales(...)` and `global_scale(...)` exposing the two levels
+of scale, all float64 in / float64 out.
+
+There is **one** block-scaling implementation. `quantize_mxfp4` and
+`quantize_nvfp4` are thin presets that fix its parameters and add no
+logic of their own; likewise `mxfp4_block_scales`, `nvfp4_block_scales`
+and `nvfp4_global_scale`. The sections below describe the two formats,
+but the code path is shared, so a change to the recipe reaches both.
+
+| `block_size` | `scale_format` | `use_global_scale` | what it is |
+|---|---|---|---|
+| 32 | `e8m0` | False | **MXFP4** -- a real format (OCP MX) |
+| 16 | `e4m3` | True | **NVFP4** -- a real format (NVIDIA) |
+| 8, 16, 64 | `e8m0` | False | experimental control |
+| 8, 32, 64 | `e4m3` | True | experimental control |
+
+**Why the controls exist.** MXFP4 and NVFP4 differ in *both* block size
+and scale format at once, so any measured difference between them is
+unattributable: it could be the 32-vs-16 block, the E8M0-vs-E4M3 scale,
+or an interaction. The study therefore runs the full `block_size ∈ {8,
+16, 32, 64} × scale_format ∈ {e8m0, e4m3}` grid, so that block size can
+be held fixed while the scale format varies and vice versa. Block sizes
+8 and 64 are the endpoints that show whether the block-size effect is
+monotone over the range.
+
+**The controls are not proposals.** Six of the eight combinations --
+including `block_size=16` with `e8m0` and `block_size=32` with `e4m3` --
+correspond to no hardware, no specification and no vendor format. They
+are measurement instruments for a controlled comparison between two
+formats that already exist, and nothing in this project should be read
+as introducing, endorsing or benchmarking a new format. Results tables
+must keep the real/control distinction visible.
+
+`use_global_scale` is a free parameter rather than a synonym for the
+scale format, so all four scale/global combinations run, but the study
+uses only the two pairings above -- the two that make sense. E8M0 spans
+255 binades and reaches any block's magnitude unaided; E4M3 spans about
+19 and overflows to NaN without a global scale (see "Why the global
+scale exists" below, which the general function carries verbatim: the
+clamp that keeps a block scale off E4M3's NaN code applies at every
+block size). The other two are documented in the `quantize_blocked`
+docstring: E8M0 *with* a global scale gives up the exactness of a
+power-of-two scale, and E4M3 *without* one is the NVFP4 bug.
+
+`element_format` is E2M1 in every configuration. It is held fixed on
+purpose -- both real formats store E2M1, so keeping it constant makes
+the scaling the only thing that varies across the grid. It is a
+parameter rather than a constant only so that the assumption is stated
+at the call site; passing anything else raises `ValueError`.
+
 ### MXFP4 block scaling
 
 Implemented: `quantize_mxfp4(x, block_size=32, rng=None, round_mode="rtne")`
-and `mxfp4_block_scales(x, block_size=32)`, float64 in / float64 out.
+and `mxfp4_block_scales(x, block_size=32)`, float64 in / float64 out. Both are
+presets of `quantize_blocked` / `block_scales` with `scale_format="e8m0"` and
+`use_global_scale=False`; passing any other `block_size` gives a control
+configuration, not MXFP4.
 
 MXFP4 is E2M1 elements plus one shared power-of-two scale per block of
 `block_size` contiguous elements. `quantize_mxfp4` returns the
@@ -291,7 +348,10 @@ published. The `mx` package itself runs unmodified on current torch.
 
 Implemented: `quantize_nvfp4(x, block_size=16, rng=None, round_mode="rtne")`,
 `nvfp4_block_scales(x, block_size=16)` and `nvfp4_global_scale(x)`, float64
-in / float64 out. As with MXFP4, `quantize_nvfp4` returns the
+in / float64 out. All three are presets of `quantize_blocked` /
+`block_scales` / `global_scale` with `scale_format="e4m3"` and
+`use_global_scale=True`; passing any other `block_size` gives a control
+configuration, not NVFP4. As with MXFP4, `quantize_nvfp4` returns the
 *reconstruction*; the two levels of scale are fetched separately.
 
 NVFP4 stores exactly the same E2M1 elements as MXFP4. **The scaling is the

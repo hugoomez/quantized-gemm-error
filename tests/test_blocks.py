@@ -6,9 +6,12 @@ from qgemm.blocks import (
     MXFP4_ELEM_MAX,
     NVFP4_BLOCK_SIZE,
     NVFP4_SCALE_MAX,
+    block_scales,
+    global_scale,
     mxfp4_block_scales,
     nvfp4_block_scales,
     nvfp4_global_scale,
+    quantize_blocked,
     quantize_mxfp4,
     quantize_nvfp4,
 )
@@ -710,3 +713,213 @@ def test_matches_torchao_nvfp4_on_a_well_conditioned_tensor():
     theirs = _torchao_nvfp4(x, 16)
     ours = quantize_nvfp4(x, block_size=16)
     np.testing.assert_allclose(ours, theirs, rtol=1e-6, atol=0.0)
+
+
+# =============================================================================
+# quantize_blocked: the parametrization both presets are built on
+# =============================================================================
+
+# The two axes the study varies. Only (32, "e8m0") and (16, "e4m3") are real
+# hardware formats; the other six are experimental controls that exist to
+# separate the effect of block size from the effect of scale format.
+_BLOCK_SIZES = (8, 16, 32, 64)
+_SCALE_FORMATS = ("e8m0", "e4m3")
+# Each scale format is paired with the global-scale setting its own range calls
+# for: E8M0 spans 255 binades and needs none, E4M3 spans about 19 and would
+# otherwise overflow to NaN.
+_USES_GLOBAL_SCALE = {"e8m0": False, "e4m3": True}
+
+
+def _spread_tensor(rows: int = 4, cols: int = 64, seed: int = 20260820) -> np.ndarray:
+    """Random float64 with enough per-block dynamic range to separate configs."""
+    rng = np.random.default_rng(seed)
+    return rng.standard_normal((rows, cols)) * rng.lognormal(0.0, 2.0, (rows, cols))
+
+
+# --- the presets are the general function, not a second implementation --------
+
+
+def test_mxfp4_is_quantize_blocked_with_the_mx_parameters():
+    x = _spread_tensor()
+    np.testing.assert_array_equal(
+        quantize_mxfp4(x, block_size=32),
+        quantize_blocked(x, block_size=32, scale_format="e8m0", use_global_scale=False),
+    )
+
+
+def test_nvfp4_is_quantize_blocked_with_the_nvidia_parameters():
+    x = _spread_tensor()
+    np.testing.assert_array_equal(
+        quantize_nvfp4(x, block_size=16),
+        quantize_blocked(x, block_size=16, scale_format="e4m3", use_global_scale=True),
+    )
+
+
+def test_preset_defaults_are_the_real_format_parameters():
+    x = _spread_tensor()
+    np.testing.assert_array_equal(
+        quantize_mxfp4(x),
+        quantize_blocked(
+            x, block_size=MXFP4_BLOCK_SIZE, scale_format="e8m0", use_global_scale=False
+        ),
+    )
+    np.testing.assert_array_equal(
+        quantize_nvfp4(x),
+        quantize_blocked(
+            x, block_size=NVFP4_BLOCK_SIZE, scale_format="e4m3", use_global_scale=True
+        ),
+    )
+
+
+def test_preset_scale_helpers_are_the_general_scale_helpers():
+    x = _spread_tensor()
+    np.testing.assert_array_equal(
+        mxfp4_block_scales(x, block_size=32),
+        block_scales(x, block_size=32, scale_format="e8m0", use_global_scale=False),
+    )
+    np.testing.assert_array_equal(
+        nvfp4_block_scales(x, block_size=16),
+        block_scales(x, block_size=16, scale_format="e4m3", use_global_scale=True),
+    )
+    assert nvfp4_global_scale(x) == global_scale(x, scale_format="e4m3")
+
+
+# --- the full grid: 4 block sizes x 2 scale formats ---------------------------
+
+
+@pytest.mark.parametrize("block_size", _BLOCK_SIZES)
+@pytest.mark.parametrize("scale_format", _SCALE_FORMATS)
+def test_every_combination_runs_and_returns_finite_output(block_size, scale_format):
+    x = _spread_tensor()
+    out = quantize_blocked(
+        x,
+        block_size=block_size,
+        scale_format=scale_format,
+        use_global_scale=_USES_GLOBAL_SCALE[scale_format],
+    )
+    assert out.shape == x.shape
+    assert out.dtype == np.float64
+    assert np.isfinite(out).all()
+
+
+def test_every_combination_is_numerically_distinct():
+    # A configuration that silently collapses onto another one measures
+    # nothing, and would make the block-size/scale-format contrast in the
+    # results table a fiction. If this ever fires, find out why -- do not
+    # weaken the assertion.
+    x = _spread_tensor()
+    outs = {
+        (block_size, scale_format): quantize_blocked(
+            x,
+            block_size=block_size,
+            scale_format=scale_format,
+            use_global_scale=_USES_GLOBAL_SCALE[scale_format],
+        )
+        for block_size in _BLOCK_SIZES
+        for scale_format in _SCALE_FORMATS
+    }
+
+    keys = list(outs)
+    for i, a in enumerate(keys):
+        for b in keys[i + 1 :]:
+            assert not np.array_equal(outs[a], outs[b]), f"{a} and {b} produce identical output"
+
+
+def test_the_global_scale_flag_is_an_independent_axis():
+    # use_global_scale is a free parameter, not a synonym for the scale format:
+    # turning it on under E8M0 is supported and changes the result, because it
+    # makes the effective scale a non-power-of-two, which E8M0 alone never is.
+    x = _spread_tensor()
+    without = quantize_blocked(x, block_size=32, scale_format="e8m0", use_global_scale=False)
+    with_global = quantize_blocked(x, block_size=32, scale_format="e8m0", use_global_scale=True)
+
+    assert np.isfinite(with_global).all()
+    assert not np.array_equal(without, with_global)
+
+
+# --- the E4M3 overflow trap, carried into the general function ----------------
+
+
+@pytest.mark.parametrize("block_size", _BLOCK_SIZES)
+def test_e4m3_block_scales_stay_in_range_at_every_block_size(block_size):
+    # The reason the global scale exists: a raw block scale is amax_b / 6, and
+    # E4M3 has no saturation -- one code above 448 is NaN. This is the NVFP4
+    # trap, and it must not be lost for the control block sizes.
+    x = _spread_tensor() * 1e6
+    scales = block_scales(x, block_size=block_size, scale_format="e4m3", use_global_scale=True)
+
+    assert np.isfinite(scales).all()
+    assert (scales <= NVFP4_SCALE_MAX).all()
+    assert np.isfinite(
+        quantize_blocked(x, block_size=block_size, scale_format="e4m3", use_global_scale=True)
+    ).all()
+
+
+def test_e4m3_without_a_global_scale_clamps_rather_than_going_nan():
+    # The same tensor with the global scale switched off: every block scale
+    # wants to be far above 448. Clamping keeps the output finite, but the
+    # block maxima saturate badly -- which is exactly why NVFP4 has a global
+    # scale, and why this control is not a proposal for a real format.
+    x = _spread_tensor() * 1e6
+    scales = block_scales(x, block_size=16, scale_format="e4m3", use_global_scale=False)
+    out = quantize_blocked(x, block_size=16, scale_format="e4m3", use_global_scale=False)
+    with_global = quantize_blocked(x, block_size=16, scale_format="e4m3", use_global_scale=True)
+
+    assert np.isfinite(scales).all()
+    assert (scales == NVFP4_SCALE_MAX).any()
+    assert np.isfinite(out).all()
+    assert np.abs(out - x).max() > np.abs(with_global - x).max()
+
+
+# --- parameter validation and pass-through ------------------------------------
+
+
+def test_unknown_scale_format_is_rejected():
+    with pytest.raises(ValueError, match="scale_format"):
+        quantize_blocked(np.zeros(32), block_size=32, scale_format="e5m2", use_global_scale=False)
+
+
+def test_unsupported_element_format_is_rejected():
+    with pytest.raises(ValueError, match="element_format"):
+        quantize_blocked(
+            np.zeros(32),
+            block_size=32,
+            scale_format="e8m0",
+            use_global_scale=False,
+            element_format="e4m3",
+        )
+
+
+def test_quantize_blocked_enforces_the_shared_input_contract():
+    with pytest.raises(TypeError, match="float64"):
+        quantize_blocked(
+            np.zeros(32, dtype=np.float32),
+            block_size=32,
+            scale_format="e8m0",
+            use_global_scale=False,
+        )
+    with pytest.raises(ValueError, match="finite"):
+        quantize_blocked(
+            np.array([np.nan] * 32), block_size=32, scale_format="e8m0", use_global_scale=False
+        )
+    with pytest.raises(ValueError, match="block_size"):
+        quantize_blocked(np.zeros(32), block_size=0, scale_format="e8m0", use_global_scale=False)
+
+
+@pytest.mark.parametrize("scale_format", _SCALE_FORMATS)
+def test_quantize_blocked_round_mode_reaches_the_elements(scale_format):
+    x = _spread_tensor()
+    kwargs = {
+        "block_size": 16,
+        "scale_format": scale_format,
+        "use_global_scale": _USES_GLOBAL_SCALE[scale_format],
+    }
+
+    np.testing.assert_array_equal(
+        quantize_blocked(x, **kwargs), quantize_blocked(x, **kwargs, round_mode="rtne")
+    )
+    with pytest.raises(ValueError, match="rng"):
+        quantize_blocked(x, **kwargs, round_mode="sr")
+
+    stochastic = quantize_blocked(x, **kwargs, round_mode="sr", rng=np.random.default_rng(0))
+    assert not np.array_equal(stochastic, quantize_blocked(x, **kwargs))

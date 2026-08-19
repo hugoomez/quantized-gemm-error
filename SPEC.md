@@ -162,7 +162,8 @@ and saturating values are returned deterministically. An explicit
 ## Block structure (`qgemm.blocks`)
 
 TBD -- the full list of block sizes and axes considered (e.g. per-tensor,
-per-row). Implemented so far: MXFP4.
+per-row). Implemented so far: MXFP4 and NVFP4, which share E2M1 elements and
+differ only in how those elements are scaled.
 
 ### MXFP4 block scaling
 
@@ -259,6 +260,124 @@ excluded from the dependency set until Phase 4.4. **The divergence
 described above is therefore derived from the MX scale formula, not yet
 observed against a running `microxcaling`;** the tests exist so that
 adding `torch` in Phase 4.4 either confirms it or fails loudly.
+
+### NVFP4 block scaling
+
+Implemented: `quantize_nvfp4(x, block_size=16, rng=None, round_mode="rtne")`,
+`nvfp4_block_scales(x, block_size=16)` and `nvfp4_global_scale(x)`, float64
+in / float64 out. As with MXFP4, `quantize_nvfp4` returns the
+*reconstruction*; the two levels of scale are fetched separately.
+
+NVFP4 stores exactly the same E2M1 elements as MXFP4. **The scaling is the
+entire difference**, and it is scaling at two levels rather than one:
+
+| | MXFP4 | NVFP4 |
+|---|---|---|
+| elements | E2M1 | E2M1 |
+| block size | 32 | 16 |
+| block scale | E8M0 -- a power of two | E4M3 -- 1/4/3 bits |
+| global scale | none | one per tensor |
+| scale rounding | exponent rounded **up** | RTNE (`quantize_e4m3`) |
+| clipping of the block max | impossible by construction | up to ~6% |
+| resolution given up to the scale | up to a full binade (1 bit) | at most 6.25% |
+| blocks reachable from one scale | `2**-127 .. 2**127` | `2**-9 .. 448`, relative to the global scale |
+| rows independent of each other | yes | **no** |
+
+**Recipe.**
+
+1. Global scale, one number for the whole tensor:
+   `s_global = max_b(amax_b) / (6 * 448)`.
+2. Per block: `s_b = quantize_e4m3((amax_b / s_global) / 6)`.
+3. `q_i = quantize_e2m1(x_i / (s_b * s_global), mode=round_mode)`.
+4. Reconstruct `x_hat_i = q_i * s_b * s_global`.
+5. Degenerate cases: an all-zero tensor takes `s_global = 1`, and a block
+   whose `s_b` is zero reconstructs to zero.
+
+**Why the global scale exists.** To keep the block scales inside E4M3's
+range, and for no other reason. A block scale is a magnitude taken from the
+input data, `amax_b / 6`, and E4M3 tops out at 448 -- so on a tensor whose
+values run to `1e6` every block scale is out of range. E4M3 does not
+saturate: the code above its maximum is NaN, so this failure is not even a
+graceful one. Dividing by `s_global` first normalises the tensor so that its
+largest block wants a scale of exactly 448, the top of E4M3, and every other
+block wants less. `s_global` is a full float64 here (float32 in hardware), so
+it costs nothing in precision and buys the whole E4M3 range for the block
+scales.
+
+Dropping this step is the natural bug and it has a diagnostic signature:
+block scales pinned at the top of E4M3 (or NaN), and NVFP4 measuring *worse*
+than MXFP4 -- the opposite of what the format is for. `tests/test_blocks.py`
+asserts the accuracy ordering directly for that reason, so the symptom is a
+test failure rather than a number in a results table.
+
+**The analytic contrast.** The same block used for MXFP4 above, `amax = 4.5`,
+at equal block size so that the scale format is the only difference:
+
+| | MXFP4 | NVFP4 |
+|---|---|---|
+| ideal scale | 0.75 | 0.75 |
+| representable scale | `2**0 = 1` (rounded up) | `s_b * s_global = 0.75` exactly |
+| `4.5 / s` | 4.5 | 6 |
+| nearest E2M1 grid point | 4 | 6 |
+| reconstruction | **4.0** | **4.5 exactly** |
+| error | 0.5 | 0 |
+
+`0.75 = 1.5 * 2**-1` is an E4M3 value and is not an E8M0 value, and that one
+fact is the whole of the difference here. Both halves are asserted exactly
+(`==`, not `allclose`) in `tests/test_blocks.py`.
+
+**Clipping is possible, unlike in MXFP4.** `quantize_e4m3` rounds to nearest,
+so `s_b` can round *down* below the ideal scale, leaving
+`amax_b / (s_b * s_global)` above 6 -- and E2M1 saturates there, clipping the
+block maximum. The bound is E4M3's half-ulp at the bottom of a binade, so the
+block max loses at most about 6% of its magnitude. MXFP4's round-up rule
+forbids this by construction, at the cost of up to a full binade of
+resolution for every other element in the block. NVFP4 takes the opposite
+side of that trade, and this implementation follows the format rather than
+importing MXFP4's rule; a variant that rounds `s_b` up to the next E4M3 value
+would be a different format and is not what is measured here.
+
+**Zero scales.** E8M0 has no zero, so an MXFP4 scale is never zero and an
+all-zero block is given `s_b = 1`. E4M3 does have a zero, so `s_b == 0` is a
+representable outcome and occurs for two kinds of block: one that is entirely
+zero, and one whose `amax` is so far below the tensor's that its ideal scale
+falls under E4M3's smallest subnormal -- precisely when
+`448 * amax_b / amax < 2**-10`, i.e. a ratio below `2**-18.8`. Both flush to
+zero, which is what a scale of zero means. So NVFP4's usable scale range
+spans about 19 binades, against E8M0's 255: the price of spending scale bits
+on mantissa instead of exponent, and a real limit on tensors with extreme
+per-block dynamic range.
+
+**Rows are not independent.** `s_global` is per tensor, leading axes
+included, so a row's reconstruction depends on the rest of the tensor -- a
+property MXFP4 does not have and one to keep in mind when comparing a matrix
+against its rows. The block scales themselves remain per row.
+
+**One numerical corner.** The argument to `quantize_e4m3` in step 2 is
+`448 * amax_b / amax` and so cannot exceed 448 mathematically. It can
+numerically: once `amax` is below roughly `1e-305`, `s_global` is itself a
+float64 subnormal and carries a large relative rounding error (at
+`amax = 1.4e-320` the argument comes out at 472), which E4M3 would take to
+NaN. `nvfp4_block_scales` therefore clamps the argument to 448 before
+quantizing. Below about `1.3e-320` the global scale underflows to zero
+outright and falls back to `1.0`. Both are properties of float64-extreme
+input and are reported through the returned values, not raised.
+
+**Blocking axis, tail policy, input contract.** Identical to MXFP4: blocks
+run along the **last axis** only, a trailing partial block stays short and
+takes its own scale (numerically identical to zero-padding it, asserted as a
+test), and NaN and infinity are rejected with `ValueError`. Note that under
+NVFP4 a non-finite value would poison the *global* scale and with it the
+entire tensor, not just its own block.
+
+**Relationship to `torchao`.** `tests/test_blocks.py` carries a golden-
+reference comparison against `torchao`'s NVFP4, restricted to a tensor whose
+values are float32-exact and whose scales land on E4M3 grid points exactly.
+It is a **sanity check, not an authority**: `torchao`'s NVFP4 lives under
+`torchao.prototype`, it computes the global scale in float32, and unlike
+`microxcaling` for MXFP4 it is not a reference implementation of a published
+specification. The test `skip`s when `torchao` is not importable, which is
+the case in this environment until `torch` arrives in Phase 4.4.
 
 ## Rounding modes (`qgemm.rounding`)
 

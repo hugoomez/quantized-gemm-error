@@ -1,8 +1,18 @@
 import numpy as np
 import pytest
 
-from qgemm.blocks import MXFP4_BLOCK_SIZE, MXFP4_ELEM_MAX, mxfp4_block_scales, quantize_mxfp4
-from qgemm.formats import E8M0_MAX, E8M0_MIN
+from qgemm.blocks import (
+    MXFP4_BLOCK_SIZE,
+    MXFP4_ELEM_MAX,
+    NVFP4_BLOCK_SIZE,
+    NVFP4_SCALE_MAX,
+    mxfp4_block_scales,
+    nvfp4_block_scales,
+    nvfp4_global_scale,
+    quantize_mxfp4,
+    quantize_nvfp4,
+)
+from qgemm.formats import E8M0_MAX, E8M0_MIN, quantize_e4m3
 
 
 def _scale_per_element(scales: np.ndarray, n: int, block_size: int) -> np.ndarray:
@@ -331,3 +341,328 @@ def test_microxcaling_saturates_the_block_max_where_we_round_the_scale_up():
     ours = quantize_mxfp4(x, block_size=32)
     assert mxfp4_block_scales(x, block_size=32)[0, 0] == 2.0
     assert ours[0, 0] == 8.0
+
+
+# =============================================================================
+# NVFP4: E2M1 elements, E4M3 block scale, one float64 global scale
+# =============================================================================
+
+
+def _nvfp4_scale_per_element(x: np.ndarray, block_size: int) -> np.ndarray:
+    """The effective per-element scale `s_b * s_global`, one entry per element."""
+    scales = nvfp4_block_scales(x, block_size=block_size) * nvfp4_global_scale(x)
+    return _scale_per_element(scales, x.shape[-1], block_size)
+
+
+# --- the analytic case, in direct contrast with MXFP4 -------------------------
+
+
+def test_nvfp4_reconstructs_amax_4p5_exactly():
+    # s_global = 4.5 / (6 * 448); s_b = quantize_e4m3(448) = 448, so the
+    # effective scale is exactly 0.75 -- and 4.5 / 0.75 = 6 is the top E2M1
+    # grid point. Nothing is rounded anywhere, so this is exact, not close.
+    x = np.zeros(16, dtype=np.float64)
+    x[0] = 4.5
+
+    assert nvfp4_global_scale(x) == 4.5 / (6.0 * 448.0)
+    assert nvfp4_block_scales(x, block_size=16)[0] == 448.0
+
+    out = quantize_nvfp4(x, block_size=16)
+    assert out[0] == 4.5
+    assert out[0] - x[0] == 0.0
+
+
+def test_nvfp4_reconstructs_4p5_exactly_where_mxfp4_rounds_it_to_4():
+    # The core claim in miniature, at equal block size so that the only
+    # difference is the scale format: a power-of-two scale (E8M0) forces MXFP4
+    # onto s_b = 1 and 4.5 falls to the grid point 4; E4M3 expresses 0.75.
+    x = np.zeros(16, dtype=np.float64)
+    x[0] = 4.5
+
+    assert quantize_mxfp4(x, block_size=16)[0] == 4.0
+    assert quantize_nvfp4(x, block_size=16)[0] == 4.5
+
+
+# --- the global scale ---------------------------------------------------------
+
+
+def test_global_scale_is_the_tensor_amax_over_six_times_448():
+    rng = np.random.default_rng(20260820)
+    x = rng.standard_normal((4, 32)) * 17.0
+    assert nvfp4_global_scale(x) == np.abs(x).max() / (MXFP4_ELEM_MAX * NVFP4_SCALE_MAX)
+
+
+def test_the_global_scale_is_per_tensor_so_rows_are_not_independent():
+    # Unlike MXFP4, a row's reconstruction depends on the rest of the tensor:
+    # the global scale is a single per-tensor number. Documented, not a bug.
+    row = np.zeros(16, dtype=np.float64)
+    row[0] = 4.5
+    together = np.stack([row, row * 100.0])
+
+    assert quantize_nvfp4(row, block_size=16)[0] == 4.5
+    embedded = quantize_nvfp4(together, block_size=16)[0, 0]
+    assert embedded != 4.5
+    assert abs(embedded - 4.5) < 0.05  # still a small effect, not a collapse
+
+
+# --- the trap: block scales must stay inside E4M3 ------------------------------
+
+
+def test_no_block_scale_ever_exceeds_the_e4m3_maximum():
+    rng = np.random.default_rng(20260820)
+    # Magnitudes spanning many binades, and far above 6 * 448 in absolute terms:
+    # without the global scale, amax_b / 6 would land outside E4M3 entirely.
+    x = rng.standard_normal((9, 64)) * rng.lognormal(0.0, 8.0, (9, 64)) * 1e6
+    scales = nvfp4_block_scales(x, block_size=16)
+
+    assert np.all(np.isfinite(scales))
+    assert np.all(scales <= NVFP4_SCALE_MAX)
+    assert np.all(quantize_e4m3(scales) == scales)  # every scale is an E4M3 value
+
+
+def test_large_magnitude_tensor_does_not_saturate_its_block_scales():
+    # The specific failure mode of dropping the global scale: with block scales
+    # taken straight from the data, all four of these blocks pin at the top of
+    # E4M3 and stop being scaled relative to one another at all.
+    x = np.full((4, 16), 1e12, dtype=np.float64)
+    x[1] *= 2.0**-10
+
+    scales = nvfp4_block_scales(x, block_size=16)
+    assert np.all(np.isfinite(scales))
+    # The block holding the tensor maximum sits exactly at the top of E4M3 --
+    # that is what the global scale is chosen to arrange -- and the smaller
+    # block sits 2**-10 below it, with room to spare.
+    assert scales[0, 0] == NVFP4_SCALE_MAX
+    assert scales[1, 0] == NVFP4_SCALE_MAX * 2.0**-10
+    assert np.all(np.isfinite(quantize_nvfp4(x, block_size=16)))
+
+
+def test_nvfp4_is_more_accurate_than_mxfp4_at_the_same_block_size():
+    # The trap's symptom, asserted directly: if this ever inverts, suspect a
+    # missing or wrong global scale before suspecting the element numerics.
+    rng = np.random.default_rng(20260820)
+    x = rng.standard_normal((32, 64)) * rng.lognormal(0.0, 2.0, (32, 1)) * 1e6
+
+    err_nv = np.sqrt(np.mean((quantize_nvfp4(x, block_size=16) - x) ** 2))
+    err_mx = np.sqrt(np.mean((quantize_mxfp4(x, block_size=16) - x) ** 2))
+    assert err_nv < err_mx
+
+
+# --- degenerate blocks and tensors --------------------------------------------
+
+
+def test_all_zero_tensor_reconstructs_to_zero_without_nan():
+    x = np.zeros((3, 32), dtype=np.float64)
+    assert nvfp4_global_scale(x) == 1.0  # no 0/0
+    out = quantize_nvfp4(x, block_size=16)
+    assert np.all(np.isfinite(out))
+    np.testing.assert_array_equal(out, x)
+
+
+def test_zero_block_next_to_a_nonzero_block_reconstructs_to_zero():
+    x = np.zeros((1, 32), dtype=np.float64)
+    x[0, 16] = 4.5
+    scales = nvfp4_block_scales(x, block_size=16)
+    assert scales[0, 0] == 0.0  # E4M3 has a zero, unlike E8M0
+    out = quantize_nvfp4(x, block_size=16)
+    assert np.all(np.isfinite(out))
+    np.testing.assert_array_equal(out[0, :16], np.zeros(16))
+
+
+def test_block_far_below_the_tensor_max_flushes_to_zero_without_nan():
+    # s_b = quantize_e4m3(448 * amax_b / amax) underflows E4M3 once the ratio
+    # drops far enough, and the block flushes rather than producing NaN.
+    x = np.zeros((2, 16), dtype=np.float64)
+    x[0] = 1.0
+    x[1] = 1e-9
+
+    out = quantize_nvfp4(x, block_size=16)
+    assert np.all(np.isfinite(out))
+    assert nvfp4_block_scales(x, block_size=16)[1, 0] == 0.0
+    np.testing.assert_array_equal(out[1], np.zeros(16))
+
+
+def test_extremely_small_tensor_produces_no_nan():
+    # The global scale itself underflows float64 here; it falls back to 1.0.
+    x = np.full(16, 5e-324, dtype=np.float64)
+    assert nvfp4_global_scale(x) == 1.0
+    assert np.all(np.isfinite(quantize_nvfp4(x, block_size=16)))
+
+
+def test_subnormal_global_scale_does_not_overflow_the_block_scale_to_nan():
+    # At the very bottom of float64 the global scale is itself subnormal and so
+    # carries a large relative rounding error: amax_b / s_global / 6 comes out
+    # at 472 here, and E4M3 overflows to NaN rather than saturating.
+    x = np.full(16, 1.4e-320, dtype=np.float64)
+    scales = nvfp4_block_scales(x, block_size=16)
+    assert np.all(np.isfinite(scales))
+    assert scales[0] == NVFP4_SCALE_MAX
+    assert np.all(np.isfinite(quantize_nvfp4(x, block_size=16)))
+
+
+def test_nvfp4_signed_zero_is_preserved():
+    x = np.zeros(16, dtype=np.float64)
+    x[0] = -0.0
+    x[1] = 4.5
+    assert np.signbit(quantize_nvfp4(x, block_size=16)[0])
+
+
+# --- axis, shape and tail policy (same conventions as MXFP4) ------------------
+
+
+def test_nvfp4_blocks_run_along_the_last_axis_not_the_first():
+    x = np.empty((2, 16), dtype=np.float64)
+    x[0] = 4.5 * 2.0**-8
+    x[1] = 4.5
+
+    scales = nvfp4_block_scales(x, block_size=16)
+    assert scales.shape == (2, 1)
+    # 448 * 2**-8 = 1.75 is an exact E4M3 value, so the small row survives.
+    assert scales[0, 0] == 448.0 * 2.0**-8
+    assert scales[1, 0] == 448.0
+
+    out = quantize_nvfp4(x, block_size=16)
+    assert np.all(out[0] == 4.5 * 2.0**-8)
+    assert np.all(out[1] == 4.5)
+
+
+def test_nvfp4_leading_axes_are_untouched_and_shape_is_preserved():
+    rng = np.random.default_rng(21)
+    x = rng.standard_normal((2, 3, 32))
+    assert quantize_nvfp4(x, block_size=16).shape == (2, 3, 32)
+    assert nvfp4_block_scales(x, block_size=16).shape == (2, 3, 2)
+
+
+def test_nvfp4_one_dimensional_input_is_a_single_row():
+    rng = np.random.default_rng(22)
+    x = rng.standard_normal(32)
+    assert quantize_nvfp4(x, block_size=16).shape == (32,)
+    assert nvfp4_block_scales(x, block_size=16).shape == (2,)
+
+
+def test_nvfp4_final_partial_block_gets_its_own_scale():
+    x = np.zeros(20, dtype=np.float64)
+    x[:16] = 4.5
+    x[16:] = 4.5 * 2.0**-8
+
+    scales = nvfp4_block_scales(x, block_size=16)
+    assert scales.shape == (2,)
+    assert scales[0] == 448.0
+    assert scales[1] == 448.0 * 2.0**-8
+    assert np.all(quantize_nvfp4(x, block_size=16)[16:] == 4.5 * 2.0**-8)
+
+
+def test_nvfp4_short_tail_is_identical_to_zero_padding_the_tail():
+    rng = np.random.default_rng(23)
+    x = rng.standard_normal(38) * 10.0
+    padded = np.concatenate([x, np.zeros(16 - 38 % 16)])
+    np.testing.assert_array_equal(
+        quantize_nvfp4(x, block_size=16), quantize_nvfp4(padded, block_size=16)[:38]
+    )
+
+
+def test_nvfp4_block_shorter_than_block_size_is_allowed():
+    x = np.array([4.5, 1.5, -3.0], dtype=np.float64)
+    assert nvfp4_block_scales(x, block_size=16).shape == (1,)
+    np.testing.assert_array_equal(quantize_nvfp4(x, block_size=16), x)
+
+
+def test_nvfp4_default_block_size_is_16():
+    assert NVFP4_BLOCK_SIZE == 16
+    rng = np.random.default_rng(24)
+    x = rng.standard_normal(32)
+    np.testing.assert_array_equal(quantize_nvfp4(x), quantize_nvfp4(x, block_size=16))
+
+
+# --- rounding modes -----------------------------------------------------------
+
+
+def test_nvfp4_rtne_is_the_default_and_is_deterministic():
+    rng = np.random.default_rng(25)
+    x = rng.standard_normal((4, 16))
+    np.testing.assert_array_equal(quantize_nvfp4(x), quantize_nvfp4(x, round_mode="rtne"))
+
+
+def test_nvfp4_stochastic_rounding_requires_an_explicit_generator():
+    x = np.zeros(16, dtype=np.float64)
+    with pytest.raises(ValueError, match="Generator"):
+        quantize_nvfp4(x, round_mode="sr")
+
+
+def test_nvfp4_stochastic_rounding_is_unbiased_within_a_block():
+    rng = np.random.default_rng(20260820)
+    x = np.empty((20_000, 16), dtype=np.float64)
+    x[:, 0] = 6.0  # tensor amax 6 -> s_b * s_global == 1.0 exactly for every block
+    x[:, 1:] = 1.2  # 40% of the way from grid point 1.0 to 1.5
+
+    out = quantize_nvfp4(x, block_size=16, rng=rng, round_mode="sr")
+
+    np.testing.assert_array_equal(_nvfp4_scale_per_element(x, 16), np.ones_like(x))
+    assert set(np.unique(out[:, 1:])) == {1.0, 1.5}
+    assert abs(out[:, 1:].mean() - 1.2) < 5e-3
+
+
+def test_nvfp4_unknown_round_mode_is_rejected():
+    with pytest.raises(ValueError, match="mode"):
+        quantize_nvfp4(np.zeros(16), round_mode="floor")
+
+
+# --- input contract -----------------------------------------------------------
+
+
+def test_nvfp4_non_float64_input_is_rejected():
+    with pytest.raises(TypeError, match="float64"):
+        quantize_nvfp4(np.zeros(16, dtype=np.float32))
+    with pytest.raises(TypeError, match="float64"):
+        nvfp4_block_scales(np.zeros(16, dtype=np.float32))
+
+
+def test_nvfp4_non_finite_input_is_rejected():
+    x = np.zeros(16, dtype=np.float64)
+    x[0] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        quantize_nvfp4(x)
+    x[0] = np.inf
+    with pytest.raises(ValueError, match="finite"):
+        quantize_nvfp4(x)
+
+
+def test_nvfp4_non_positive_block_size_is_rejected():
+    with pytest.raises(ValueError, match="block_size"):
+        quantize_nvfp4(np.zeros(16), block_size=0)
+
+
+# --- golden reference: torchao (sanity check only, see SPEC.md) ---------------
+
+
+def _torchao_nvfp4(x: np.ndarray, block_size: int) -> np.ndarray:
+    """Run torchao's NVFP4 quantizer, or skip if it is not usable here."""
+    torch = pytest.importorskip("torch", reason="torchao needs torch")
+    nvfp4_mod = pytest.importorskip(
+        "torchao.prototype.mx_formats.nvfp4_tensor", reason="torchao is not installed"
+    )
+
+    tensor_cls = getattr(nvfp4_mod, "NVFP4Tensor", None)
+    if tensor_cls is None or not hasattr(tensor_cls, "to_nvfp4"):
+        pytest.skip("installed torchao does not expose NVFP4Tensor.to_nvfp4")
+
+    try:
+        quantized = tensor_cls.to_nvfp4(torch.tensor(x, dtype=torch.float32), block_size=block_size)
+        out = quantized.to_dtype(torch.float32)
+    except (TypeError, KeyError, RuntimeError, AssertionError) as exc:  # pragma: no cover
+        pytest.skip(f"installed torchao has an incompatible NVFP4 API: {exc}")
+    return np.asarray(out.detach().cpu().numpy(), dtype=np.float64)
+
+
+def test_matches_torchao_nvfp4_on_a_well_conditioned_tensor():
+    # Sanity check, not authoritative: torchao NVFP4 is a prototype and computes
+    # the global scale in float32. Restricted to a tensor whose values are
+    # float32-exact and whose scales land on E4M3 grid points exactly.
+    x = np.zeros((4, 16), dtype=np.float64)
+    x[:, 0] = 4.5
+    x[:, 1] = 2.25
+    x[:, 2] = -1.125
+
+    theirs = _torchao_nvfp4(x, 16)
+    ours = quantize_nvfp4(x, block_size=16)
+    np.testing.assert_allclose(ours, theirs, rtol=1e-6, atol=0.0)

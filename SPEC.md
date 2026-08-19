@@ -161,8 +161,104 @@ and saturating values are returned deterministically. An explicit
 
 ## Block structure (`qgemm.blocks`)
 
-TBD -- block sizes and axes considered (e.g. per-tensor, per-row,
-microscaling blocks).
+TBD -- the full list of block sizes and axes considered (e.g. per-tensor,
+per-row). Implemented so far: MXFP4.
+
+### MXFP4 block scaling
+
+Implemented: `quantize_mxfp4(x, block_size=32, rng=None, round_mode="rtne")`
+and `mxfp4_block_scales(x, block_size=32)`, float64 in / float64 out.
+
+MXFP4 is E2M1 elements plus one shared power-of-two scale per block of
+`block_size` contiguous elements. `quantize_mxfp4` returns the
+*reconstruction* `q_i * s_b`, not the `(q_i, s_b)` pair; the scales are
+available separately from `mxfp4_block_scales`, which is what the error
+analysis needs when it asks what the block structure did.
+
+**Recipe**, per block:
+
+1. `amax_b = max |x_i|` over the block.
+2. `s_ideal = amax_b / 6` (6 is the largest E2M1 magnitude).
+3. `s_b = 2 ** ceil(log2(s_ideal))` -- the exponent is rounded **up**.
+4. `q_i = quantize_e2m1(x_i / s_b, mode=round_mode)`.
+5. `x_hat_i = q_i * s_b`.
+6. Degenerate block: if `amax_b == 0` then `s_b = 1` (no `log2(0)`).
+
+Steps 4 and 5 scale by a power of two and so are exact in float64 except
+under underflow; the only rounding is the E2M1 grid rounding itself.
+
+**The exponent is computed exactly, not via `log2`.** With
+`amax_b = m * 2**e` and `m` in `[0.5, 1)` from `frexp`, the smallest `k`
+with `amax_b <= 6 * 2**k` is `e - 3` when `m <= 0.75` and `e - 2`
+otherwise. Routing through `log2(amax_b / 6)` rounds twice and can land
+one exponent low, silently reintroducing the saturation that step 3
+exists to prevent.
+
+**Why round the exponent up.** This is a design decision, not an
+implementation detail. Rounding up guarantees `amax_b / s_b <= 6`, so the
+element that set the scale always fits in the E2M1 range. Round-to-nearest
+or round-down lets `amax_b / s_b` approach 8, and everything above 6
+saturates to exactly 6 -- clipping the block's largest element by up to
+25% of its magnitude. The cost is equally real: a scale one binade larger
+halves the resolution of every *other* element in the block. So the rule
+trades a bounded, uniform precision loss across the block against an
+unbounded clipping error on its largest element, and this project takes
+that trade. An implementation could reasonably choose otherwise, and the
+reference implementation does -- see below.
+
+**Blocking axis.** Blocks run along the **last axis only**; leading axes
+are independent rows. In `A @ B` the last axis of `A` and of `B.T` is the
+contraction dimension, which is the axis a shared scale factors out of.
+Blocking any other axis yields a well-formed array that measures a
+different quantity, with no error raised, so callers transpose before
+calling. `tests/test_blocks.py` pins this with a tensor whose rows differ
+by `2**-20`: under last-axis blocking both rows survive, under axis-0
+blocking the small row would flush to zero.
+
+**Tail policy.** A trailing partial block is kept **short** and gets its
+own scale from its own `amax`; it is never merged into the previous
+block. This is numerically identical to zero-padding the tail to a full
+block and trimming the output -- appending zeros changes neither `amax_b`
+nor any element's quantization -- so hardware that pads agrees with this
+function. The equivalence is asserted as a test rather than assumed.
+
+**Scale range.** The shared scale is an E8M0 value, so its exponent is
+clamped to `[-127, 127]`. Outside that range the block degrades rather
+than raising: a clamped-low scale saturates the block maximum to
+`6 * 2**127`, a clamped-high scale flushes the block to zero. Both are
+properties of float64-extreme input data, so they are reported through
+the returned values.
+
+**Rounding modes.** `round_mode` is passed straight through to
+`quantize_e2m1`, so `"sr"` requires an explicit
+`numpy.random.Generator`. Stochastic rounding applies to the *elements*
+within a block; the block exponent is always rounded up regardless.
+
+**Input contract.** NaN and infinity are rejected with `ValueError`.
+Neither has an E2M1 encoding, and either one would poison a whole
+block's `amax` -- one infinity in a block would otherwise silently zero
+the other 31 elements.
+
+**Relationship to `microxcaling`.** Microsoft's `microxcaling` (and the
+OCP MX specification it implements) computes the shared scale as
+`2 ** (floor(log2(amax_b)) - emax_elem)` with `emax_elem = 2` for E2M1,
+i.e. it rounds the exponent **down** and accepts the saturation. The two
+rules coincide exactly when `amax_b`'s own significand is at most 1.5,
+and diverge otherwise; concretely, `amax_b = 7` gives `s_b = 2` here
+(reconstructing 7 as 8) and `s_b = 1` there (clipping 7 to 6). This
+implementation deliberately keeps the round-up rule, for the reason
+above.
+
+`tests/test_blocks.py` carries the golden-reference comparison against
+`microxcaling`: exact equality over random tensors on the blocks where
+the two scale rules agree, and an explicit check that `microxcaling`
+clips the block maximum on a block where they do not. Both tests
+`skip` when `microxcaling` is not importable -- which is the case in this
+environment, since `microxcaling` requires `torch` and `torch` is
+excluded from the dependency set until Phase 4.4. **The divergence
+described above is therefore derived from the MX scale formula, not yet
+observed against a running `microxcaling`;** the tests exist so that
+adding `torch` in Phase 4.4 either confirms it or fails loudly.
 
 ## Rounding modes (`qgemm.rounding`)
 

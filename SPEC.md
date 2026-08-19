@@ -473,7 +473,86 @@ stochastic rounding, ...).
 ## Transforms (`qgemm.transforms`)
 
 TBD -- scaling strategy (per-tensor / per-block scale, absmax vs. other
-calibration) and any pre-quantization transforms under consideration.
+calibration). Implemented so far: the random Hadamard transform.
+
+### Random Hadamard Transform
+
+Implemented: `apply_rht(x, block_size, rng)`, `invert_rht(x, block_size, rng)`,
+plus the two pieces they are built from, `hadamard_matrix(block_size)` and
+`random_signs(block_size, rng)`. float64 in / float64 out.
+
+**Recipe.** `H` is the normalized Sylvester matrix, `H_1 = [1]` and
+`H_2n = (1/sqrt(2)) * [[H_n, H_n], [H_n, -H_n]]`; it is symmetric, orthogonal,
+and has every entry of magnitude `1/sqrt(block_size)`. It is randomized by
+flipping column signs, `H' = H * diag(eps)` with `eps_i` uniform on `{-1, +1}`
+drawn from the passed-in `Generator`, which leaves it orthogonal. Each
+contiguous block of `block_size` elements along the last axis is replaced by
+`H' @ x_b`; `invert_rht` applies `H'.T`.
+
+`block_size` must be a **power of two** and must divide `x.shape[-1]`; anything
+else raises `ValueError`. The project sweeps `RHT_BLOCK_SIZES = (8, 16, 32, 64)`,
+matching the block sizes in `qgemm.blocks`.
+
+**What it buys.** The transform is an isometry, so it redistributes a block's
+energy without changing it. A block whose `amax` is set by one outlier forces a
+large shared scale and spends the resolution of every other element on that
+outlier; the RHT spreads it. Exactly: a lone spike of magnitude `a` becomes
+`block_size` entries of magnitude `a/sqrt(block_size)`, so a length-16 block
+holding `[100, 0, ..., 0]` comes out with every entry at `25` and its `amax`
+down from 100 to 25. On heavy-tailed data the effect is statistical rather than
+exact -- on t-Student samples with `nu = 2`, empirical kurtosis over blocks of
+32 falls by roughly an order of magnitude. The kurtosis test asserts only the
+direction of that, since `nu = 2` has infinite population kurtosis and no exact
+target exists.
+
+Randomizing the signs is not decoration. A bare `H` has fixed structure, and a
+block proportional to a row of `H` concentrates into a single spike instead of
+being spread. The random signs make that a coincidence for any fixed input
+rather than a property of the data.
+
+**Both operands, or nothing.** Orthogonality is what makes the transform free
+across a GEMM:
+
+```
+(H'a) . (H'b) = a . (H'.T H' b) = a . b
+```
+
+This holds only if **both** operands were transformed with the **same** `H'`.
+`apply_rht` transforms one array and cannot check the other; the invariant is a
+property of how it is called, and is enforced at the call site in the GEMM
+pipeline (Step 1.7, `qgemm.gemm`). Two calls produce the same `H'` exactly when
+they are passed generators in the same state -- in practice two
+`np.random.default_rng(seed)` from one seed -- since `H'` depends on `rng` only
+through `random_signs`. The same requirement applies to `invert_rht`: given a
+generator in any other state it produces a different, equally valid orthogonal
+matrix and silently returns something that is not the original. Transforming one
+operand and not the other computes a different quantity and raises nothing,
+which is why `tests/test_transforms.py` pins both misuses as explicit negative
+tests.
+
+**Per block only; a global RHT is deliberately excluded.** Blocks run along the
+**last axis**, the same convention as `quantize_blocked` -- the axis a block
+format shares a scale over, and the contraction axis a shared rotation cancels
+along. A global (whole-row, length-`n`) RHT is a real technique and is
+*excluded by design, not merely unimplemented*: its spread factor is `sqrt(n)`
+rather than `sqrt(block_size)`, which would tie the transform's effect to the
+same `n` whose error-growth law this study sweeps, confounding the two. Keeping
+it per block leaves `block_size` as the only knob governing the transform. It
+should not be added "for completeness".
+
+**Tail policy -- differs from `quantize_blocked`.** A trailing partial block is
+*not* allowed. `quantize_blocked` keeps a short tail and gives it its own scale,
+which is well defined because a scale does not care how many elements it covers;
+a partial block has no `H'` to multiply by, and padding it would change the
+array's shape and break invertibility. A last axis that is not a whole number of
+blocks raises `ValueError`.
+
+**Implementation note.** `hadamard_matrix` doubles a `+-1` matrix and divides by
+`sqrt(block_size)` once at the end, rather than multiplying in `1/sqrt(2)` at
+each level. The two are mathematically identical, but the single division keeps
+the entries exact whenever `sqrt(block_size)` is (16 and 64 of the four swept),
+which is what lets the dispersion property above be asserted with `==` rather
+than a tolerance.
 
 ## GEMM under quantization (`qgemm.gemm`)
 

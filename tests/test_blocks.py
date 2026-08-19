@@ -12,7 +12,7 @@ from qgemm.blocks import (
     quantize_mxfp4,
     quantize_nvfp4,
 )
-from qgemm.formats import E8M0_MAX, E8M0_MIN, quantize_e4m3
+from qgemm.formats import E8M0_MAX, E8M0_MIN, quantize_e2m1, quantize_e4m3
 
 
 def _scale_per_element(scales: np.ndarray, n: int, block_size: int) -> np.ndarray:
@@ -272,7 +272,7 @@ def test_default_block_size_is_the_mx_standard_32():
 # --- golden reference: Microsoft microxcaling ---------------------------------
 
 
-def _microxcaling_mxfp4(x: np.ndarray, block_size: int) -> np.ndarray:
+def _microxcaling_mxfp4(x: np.ndarray, block_size: int, round: str = "even") -> np.ndarray:
     """Run microxcaling's MXFP4 quantizer, or skip if it isn't usable here."""
     mx_ops = pytest.importorskip("mx.mx_ops", reason="microxcaling is not installed")
     torch = pytest.importorskip("torch", reason="microxcaling needs torch")
@@ -296,8 +296,15 @@ def _microxcaling_mxfp4(x: np.ndarray, block_size: int) -> np.ndarray:
         early_exit=False,
     )
     try:
+        # round="even" is microxcaling's RTNE and the mode that corresponds to
+        # quantize_e2m1(mode="rtne"). Its round="nearest" is a *different* rule
+        # -- floor(|A| + 0.5), i.e. ties away from zero -- which disagrees with
+        # us and with ml_dtypes.float4_e2m1fn at every E2M1 midpoint. Random
+        # data never lands exactly on a midpoint, so picking the wrong mode
+        # here would leave every test below passing for the wrong reason;
+        # test_microxcaling_round_modes_at_the_e2m1_midpoints pins the choice.
         out = quantize_mx_op(
-            torch.tensor(x, dtype=torch.float32), specs, "fp4_e2m1", axes=[-1], round="nearest"
+            torch.tensor(x, dtype=torch.float32), specs, "fp4_e2m1", axes=[-1], round=round
         )
     except (TypeError, KeyError, RuntimeError) as exc:  # pragma: no cover - version drift
         pytest.skip(f"installed microxcaling has an incompatible API: {exc}")
@@ -341,6 +348,43 @@ def test_microxcaling_saturates_the_block_max_where_we_round_the_scale_up():
     ours = quantize_mxfp4(x, block_size=32)
     assert mxfp4_block_scales(x, block_size=32)[0, 0] == 2.0
     assert ours[0, 0] == 8.0
+
+
+def test_microxcaling_round_modes_at_the_e2m1_midpoints():
+    # Pins which microxcaling round mode is the right reference. "even" is RTNE
+    # and agrees with us at all seven E2M1 midpoints; "nearest" is ties-away-
+    # from-zero and disagrees at four of them. Random data never lands on a
+    # midpoint, so this is the only test that can tell the two modes apart.
+    x = np.zeros((1, 32), dtype=np.float64)
+    x[0, :7] = [0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0]
+    x[0, 7] = 6.0  # pins s_b = 1 under both scale rules
+
+    ours = quantize_mxfp4(x, block_size=32)[0, :7]
+    np.testing.assert_array_equal(ours, [0.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0])
+    np.testing.assert_array_equal(_microxcaling_mxfp4(x, 32, round="even")[0, :7], ours)
+    np.testing.assert_array_equal(
+        _microxcaling_mxfp4(x, 32, round="nearest")[0, :7],
+        [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0],
+    )
+
+
+def test_the_scale_rule_is_the_only_difference_from_microxcaling():
+    # The strong form of the comparison: swap our ceil scale for their floor
+    # scale and the two implementations agree bit for bit on every block,
+    # including the ones where the scale rules disagree. So the divergence is
+    # entirely the scale exponent -- there is no second, hidden difference in
+    # the element path, the tie handling or the block reduction.
+    rng = np.random.default_rng(20260820)
+    # float32-exact input, so microxcaling's float32 arithmetic adds no noise.
+    x = (rng.standard_normal((512, 32)) * rng.lognormal(0.0, 4.0, (512, 1))).astype(np.float32)
+    x = x.astype(np.float64)
+
+    floor_scale = np.repeat(_floor_rule_scale(x, 32), 32, axis=-1)
+    ours_with_their_scale = quantize_e2m1(x / floor_scale, mode="rtne") * floor_scale
+
+    differ = (mxfp4_block_scales(x, block_size=32) != _floor_rule_scale(x, 32))[..., 0]
+    assert differ.any(), "test tensor exercises none of the diverging blocks"
+    np.testing.assert_array_equal(ours_with_their_scale, _microxcaling_mxfp4(x, 32))
 
 
 # =============================================================================

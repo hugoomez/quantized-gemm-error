@@ -250,16 +250,42 @@ and diverge otherwise; concretely, `amax_b = 7` gives `s_b = 2` here
 implementation deliberately keeps the round-up rule, for the reason
 above.
 
-`tests/test_blocks.py` carries the golden-reference comparison against
-`microxcaling`: exact equality over random tensors on the blocks where
-the two scale rules agree, and an explicit check that `microxcaling`
-clips the block maximum on a block where they do not. Both tests
-`skip` when `microxcaling` is not importable -- which is the case in this
-environment, since `microxcaling` requires `torch` and `torch` is
-excluded from the dependency set until Phase 4.4. **The divergence
-described above is therefore derived from the MX scale formula, not yet
-observed against a running `microxcaling`;** the tests exist so that
-adding `torch` in Phase 4.4 either confirms it or fails loudly.
+**Verified against `microxcaling` 1.1.0** (`mx` from
+`github.com/microsoft/microxcaling`, run on 2026-08-20 against torch
+2.13.0+cpu in a throwaway venv; `torch` is still absent from this
+project's own dependency set until Phase 4.4, so the four comparison
+tests in `tests/test_blocks.py` `skip` under `make test`). The result is
+stronger than "the outputs are close":
+
+> Replacing our `ceil` scale with their `floor` scale makes the two
+> implementations agree **bit for bit on every block**, including the
+> ones where the scale rules disagree.
+
+So the scale exponent is the *only* difference -- the element path, the
+tie handling and the block reduction are identical. That identity is
+asserted in `test_the_scale_rule_is_the_only_difference_from_microxcaling`
+over 512 blocks of float32-exact log-normal data, of which about 40% take
+the diverging branch, and in all of those `microxcaling` clips the block
+maximum to exactly `6 * s_b`. On that data the round-up rule is very
+slightly ahead on RMS error (55521.9 vs 55538.3, a 0.03% edge) -- the
+choice is about the bounded worst case on the block maximum, not about
+average error, and the measurement should not be quoted as if it were.
+
+**Round-mode trap.** `microxcaling`'s `round="nearest"` is **not** RTNE:
+it is `floor(|A| + 0.5)`, ties away from zero, which disagrees with this
+implementation and with `ml_dtypes.float4_e2m1fn` at four of the seven
+E2M1 midpoints (`0.25 -> 0.5`, `1.25 -> 1.5`, `2.5 -> 3`, `5 -> 6`).
+Its `round="even"` is the RTNE mode and is the correct reference here.
+Random data never lands exactly on a midpoint, so the wrong mode makes
+every comparison test pass for the wrong reason; `_microxcaling_mxfp4`
+therefore pins `round="even"` and
+`test_microxcaling_round_modes_at_the_e2m1_midpoints` asserts both modes
+explicitly so the choice cannot be silently changed.
+
+Installing `microxcaling` needs `--no-deps`: its requirements pin
+`torch==2.2.0` and `torchaudio==2.1.0` simultaneously, and `torchaudio
+2.1.0` requires `torch==2.1.0`, so the dependency set cannot be solved as
+published. The `mx` package itself runs unmodified on current torch.
 
 ### NVFP4 block scaling
 

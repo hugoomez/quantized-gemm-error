@@ -1,0 +1,24 @@
+u_eff measured directly at the per-element level: 4194304 elements per cell drawn as 64 independent 64x1024 tensors, 4 configurations x 8 nu = 32 cells. Total runtime 1.1 min.
+
+SAMPLE-SIZE SUFFICIENCY. Every cell was rerun at twice the element count with an independent seed. The largest p99 movement across all 32 cells is 0.178% (config=block16_e8m0, nu=30), and the largest median movement is 0.138% (config=block16_e8m0, nu=1). Both are far below the block-size effects being measured, so 2**22 elements is sufficient for p99 and not only for the median.
+
+NEAR-ZERO POLICY. Elements at or below 0.25x their own effective scale are excluded: under RTNE they quantize to exactly zero and carry a relative error of exactly 1.0, which records the format's dynamic-range floor rather than its precision. With the cut off, every cell's p99 saturates at 1.00000 and the measurement says nothing about the grid. The cut is large and varies by cell, so the surviving fraction is tabulated per cell; it ranges from 0.360 to 0.932 across the grid.
+
+THE LEVEL-GAP CHECK (scale format held at E8M0, exactly as the n-scaling probe held it; block 32 = MXFP4 against the block-16 E8M0 control):
+
+  nu=       1:  u_eff ratio (p50) = 1.1551   vs median(BE) level ratio = 1.3206
+      excess over 1: u_eff +0.1551 against BE +0.3206 -- u_eff accounts for 48.4% of the BE level gap. DOES NOT TRACK (threshold 75%).
+  nu=       2:  u_eff ratio (p50) = 1.1196   (p99) = 1.0227   [no BE reference at this nu]
+  nu=       3:  u_eff ratio (p50) = 1.0919   (p99) = 1.0258   [no BE reference at this nu]
+  nu=       5:  u_eff ratio (p50) = 1.0663   (p99) = 1.0282   [no BE reference at this nu]
+  nu=       8:  u_eff ratio (p50) = 1.0492   (p99) = 1.0282   [no BE reference at this nu]
+  nu=      15:  u_eff ratio (p50) = 1.0342   (p99) = 1.0214   [no BE reference at this nu]
+  nu=      30:  u_eff ratio (p50) = 1.0287   vs median(BE) level ratio = 1.0344
+      excess over 1: u_eff +0.0287 against BE +0.0344 -- u_eff accounts for 83.4% of the BE level gap. TRACKS (threshold 75%).
+  nu=gaussian:  u_eff ratio (p50) = 1.0222   (p99) = 1.0183   [no BE reference at this nu]
+
+VERDICT ON THE LEVEL-GAP HYPOTHESIS: MIXED: u_eff tracks median(BE)'s level gap at nu = 30 but not at nu = 1. The direction is right everywhere, but the magnitude is not, so u_eff alone does not account for the block-size effect across the whole nu range. The bound's definition needs more thought before it is written down.
+
+NVFP4 AGAINST THE REST. NVFP4 differs from the E8M0 arms in scale format as well as block size. Its u_eff (p50) runs from 0.094033 to 0.122349 across the nu grid, against 0.108029 to 0.157282 for MXFP4; the MXFP4/NVFP4 ratio is 1.1488 at the Gaussian end and 1.2855 at nu = 1.
+
+This is groundwork, not a decision. No bound definition is written by this script and none is implied by it; qgemm.bounds gains a measurement function and nothing else. What functional form the bound should take is a human call made on review.

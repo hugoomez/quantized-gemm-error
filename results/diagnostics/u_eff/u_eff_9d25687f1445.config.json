@@ -1,0 +1,73 @@
+{
+  "be_level_ratio": {
+    "1": 1.3206,
+    "30": 1.0344
+  },
+  "be_level_ratio_source": "probe_n_scaling_44503b1d4f36",
+  "configs": [
+    {
+      "block_size": 32,
+      "element_format": "e2m1",
+      "is_real_format": true,
+      "key": "mxfp4",
+      "label": "MXFP4 (block 32, E8M0)",
+      "round_mode": "rtne",
+      "scale_format": "e8m0",
+      "use_global_scale": false
+    },
+    {
+      "block_size": 16,
+      "element_format": "e2m1",
+      "is_real_format": true,
+      "key": "nvfp4",
+      "label": "NVFP4 (block 16, E4M3 + global)",
+      "round_mode": "rtne",
+      "scale_format": "e4m3",
+      "use_global_scale": true
+    },
+    {
+      "block_size": 16,
+      "element_format": "e2m1",
+      "is_real_format": false,
+      "key": "block16_e8m0",
+      "label": "control: block 16, E8M0",
+      "round_mode": "rtne",
+      "scale_format": "e8m0",
+      "use_global_scale": false
+    },
+    {
+      "block_size": 32,
+      "element_format": "e2m1",
+      "is_real_format": false,
+      "key": "block32_e4m3",
+      "label": "control: block 32, E4M3 + global",
+      "round_mode": "rtne",
+      "scale_format": "e4m3",
+      "use_global_scale": true
+    }
+  ],
+  "distribution": "t-student (gaussian at the nu = infinity end)",
+  "explained_fraction_tol": 0.75,
+  "n_elements": 4194304,
+  "nu_grid": [
+    "1",
+    "2",
+    "3",
+    "5",
+    "8",
+    "15",
+    "30",
+    "gaussian"
+  ],
+  "quantiles": [
+    0.5,
+    0.99
+  ],
+  "script": "measure_u_eff.py",
+  "seed": 0,
+  "tensor_shape": [
+    64,
+    1024
+  ],
+  "version": 1
+}

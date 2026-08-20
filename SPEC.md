@@ -1520,3 +1520,221 @@ error's height under heavy tails than under near-Gaussian data.
 * **It closes no PREREGISTRATION.md item.** The grid, the trial count and the
   0.02 reporting threshold are diagnostic choices, not frozen commitments; none
   of them is a dated amendment under section 8.
+
+## u_eff measurement -- bound-definition groundwork, PROPOSED, pending review
+
+**Status: a measurement, not a decision.** This section supplies one of the
+quantities a theoretical error bound for block-scaled formats would need, and
+runs one causal check against a result already on the record. **It does not
+define such a bound, and nothing below should be read as defining one.** That
+decision needs human review.
+
+What landed in code is a measurement function, not a bound:
+`qgemm.bounds.measure_u_eff`, with `u_eff_samples` and
+`elementwise_relative_error` underneath it, plus tests in
+`tests/test_bounds.py`. `gamma_n` is unchanged, `qgemm.metrics` is unchanged,
+`quantize_blocked` is unchanged.
+
+Produced by `scripts/measure_u_eff.py` (one run, no manual steps, 1.1 min);
+data and figure under `results/diagnostics/u_eff/u_eff_9d25687f1445*`, the
+digest being the sha256 of the run config saved alongside.
+
+### Why `u_eff` is a distribution, not a number
+
+The classical unit roundoff is a property of a format alone -- half an ulp of a
+fixed grid. A block-scaled format has no such number. The grid an element lands
+on is set by the largest magnitude in *its block*, so an element far below its
+block's amax is resolved far more coarsely than one at the top, and the
+achieved relative error `|x_i - x_hat_i| / |x_i|` is a **distribution** whose
+shape depends on the input distribution, the block size and the scale format
+together. `measure_u_eff` reports quantiles of it, measured directly rather
+than inferred backwards through `BE`.
+
+### The near-zero policy -- a methodological decision, stated
+
+Relative error is ill-defined as `x_i -> 0`, and for a block-scaled format
+"near zero" only means anything **relative to the element's own block scale**:
+block scales span many orders of magnitude across a heavy-tailed tensor, so a
+fixed absolute floor would cut different cells in different places.
+
+**The cut is taken at `0.25 x s_eff`**, where `s_eff` is the effective scale
+(block scale times global scale) the element was quantized against. This is not
+a tuned knob: E2M1's smallest nonzero magnitude is `0.5 x s_eff`, so under RTNE
+every element at or below `0.25 x s_eff` quantizes to exactly zero and carries
+a relative error of exactly `1.0`. Those elements record the format's
+**dynamic-range floor**, not its **precision**.
+
+Keeping them makes the measurement useless, and that was checked rather than
+assumed: with the cut off, **every one of the 32 cells returns `p99 = 1.00000`
+exactly**, and the median reaches `1.0` outright at `nu = 1, block 32`. A
+quantity capped at 1 by construction cannot track a `BE` ratio, and what it
+would be measuring is how much near-zero mass the input distribution has.
+
+The price is that the excluded fraction is large and varies by cell, so the
+**surviving fraction is tabulated below** and no number here should be quoted
+without it. It ranges from 0.360 (MXFP4 at `nu = 1`) to 0.932 (NVFP4 at the
+Gaussian end).
+
+### Sample size, and why p99 is trustworthy here
+
+`2**22 = 4 194 304` elements per cell, drawn as 64 independent `(64, 1024)`
+tensors. The shape matters and is not cosmetic: NVFP4 uses a per-**tensor**
+global scale, so one flat 4M-element draw would have an amax nothing like a
+real operand's and would quantize its block scales differently. `(64, 1024)` is
+the operand shape the n-scaling probe used at its level-comparison `n`, which
+is what makes the check below apples-to-apples.
+
+Every cell was **also** run at `2**23` with an independent seed. Across all 32
+cells the largest `p99` movement is **0.178%** and the largest median movement
+is **0.138%** -- both two orders of magnitude below the block-size effects being
+measured. The extreme quantile is stable at this budget, not just the median.
+
+### Result 1: u_eff by configuration and nu
+
+Two of the four are real formats; two are the experimental controls that
+complete the 2x2 (SPEC.md, "Why the controls exist") and correspond to no
+hardware, no specification and no vendor.
+
+**`u_eff` median (p50):**
+
+| configuration | 1 | 2 | 3 | 5 | 8 | 15 | 30 | gaussian |
+|---|---|---|---|---|---|---|---|---|
+| MXFP4 (32, E8M0) *real* | 0.157282 | 0.139911 | 0.128911 | 0.119846 | 0.114749 | 0.111224 | 0.109440 | 0.108029 |
+| NVFP4 (16, E4M3+g) *real* | 0.122349 | 0.109208 | 0.102935 | 0.098530 | 0.096450 | 0.095215 | 0.094485 | 0.094033 |
+| control (16, E8M0) | 0.136158 | 0.124965 | 0.118059 | 0.112391 | 0.109365 | 0.107550 | 0.106387 | 0.105679 |
+| control (32, E4M3+g) | 0.142980 | 0.124091 | 0.113595 | 0.106150 | 0.102772 | 0.100669 | 0.099753 | 0.098980 |
+
+**`u_eff` p99:**
+
+| configuration | 1 | 2 | 3 | 5 | 8 | 15 | 30 | gaussian |
+|---|---|---|---|---|---|---|---|---|
+| MXFP4 (32, E8M0) *real* | 0.966452 | 0.946205 | 0.924187 | 0.898866 | 0.879332 | 0.862935 | 0.853144 | 0.844455 |
+| NVFP4 (16, E4M3+g) *real* | 0.944042 | 0.898145 | 0.858556 | 0.818837 | 0.795421 | 0.777581 | 0.767866 | 0.757603 |
+| control (16, E8M0) | 0.953023 | 0.925238 | 0.900945 | 0.874172 | 0.855224 | 0.844844 | 0.837034 | 0.829281 |
+| control (32, E4M3+g) | 0.961434 | 0.927008 | 0.892147 | 0.851539 | 0.826104 | 0.806383 | 0.797514 | 0.787335 |
+
+**Surviving fraction after the near-zero cut:**
+
+| configuration | 1 | 2 | 3 | 5 | 8 | 15 | 30 | gaussian |
+|---|---|---|---|---|---|---|---|---|
+| MXFP4 (32, E8M0) *real* | 0.360 | 0.678 | 0.780 | 0.838 | 0.863 | 0.879 | 0.887 | 0.893 |
+| NVFP4 (16, E4M3+g) *real* | 0.589 | 0.825 | 0.879 | 0.908 | 0.919 | 0.926 | 0.929 | 0.932 |
+| control (16, E8M0) | 0.517 | 0.762 | 0.829 | 0.868 | 0.884 | 0.894 | 0.898 | 0.902 |
+| control (32, E4M3+g) | 0.425 | 0.759 | 0.843 | 0.887 | 0.904 | 0.914 | 0.918 | 0.922 |
+
+Figure: `u_eff_9d25687f1445_u_eff.png` -- left panel `u_eff` (median, log
+scale) against `nu`, one line per configuration, real formats solid and
+controls dashed; right panel the level-gap check below.
+
+**Note on p99.** At heavy tails the p99 is pressed against its own ceiling
+(0.966 for MXFP4 at `nu = 1`; the maximum possible value is 1.0, at which an
+element has flushed to zero). It is therefore compressed and a *poor*
+discriminator exactly where the differences are largest: the block-32/block-16
+p99 ratio is 1.014 at `nu = 1` against a p50 ratio of 1.155. Everything below
+uses the median for that reason.
+
+### Result 2: the level-gap check -- the direct test
+
+The n-scaling probe found that `block_size` barely moves `median(BE)`'s
+`n`-exponent but does move its **level**: at matched `n = 1024`, with the scale
+format held at E8M0, block 32 sits `1.0344x` above block 16 at `nu = 30` and
+`1.3206x` above it at `nu = 1`. The hypothesis was that `u_eff` itself differs
+by block size and absorbs the whole effect. If `median(BE) ~ C(n) * u_eff`,
+the two ratios must be equal.
+
+Scale format held at E8M0, exactly as the probe held it:
+
+| `nu` | u_eff ratio 32/16 (p50) | median(BE) level ratio | u_eff excess | BE excess | share of the gap explained |
+|---|---|---|---|---|---|
+| 1 | 1.1551 | 1.3206 | +0.1551 | +0.3206 | **48.4%** |
+| 2 | 1.1196 | -- | +0.1196 | -- | -- |
+| 3 | 1.0919 | -- | +0.0919 | -- | -- |
+| 5 | 1.0663 | -- | +0.0663 | -- | -- |
+| 8 | 1.0492 | -- | +0.0492 | -- | -- |
+| 15 | 1.0342 | -- | +0.0342 | -- | -- |
+| 30 | 1.0287 | 1.0344 | +0.0287 | +0.0344 | **83.4%** |
+| gaussian | 1.0222 | -- | +0.0222 | -- | -- |
+
+Both ratios sit near 1, so the comparison that means anything is between their
+**excesses over 1** -- "1.03 versus 1.03" is unimpressive when the quantity of
+interest is the 0.03. The threshold for calling this consistent was declared
+before the run at 75% of the excess explained.
+
+**Verdict: MIXED, and the two `nu` are not forced into one answer.**
+
+* **At `nu = 30` the hypothesis holds.** `u_eff`'s block-size ratio accounts
+  for 83.4% of `median(BE)`'s level gap. Near-Gaussian, the level difference
+  between block sizes is essentially the per-element quantization error
+  differing between block sizes, and nothing else is needed to explain it.
+* **At `nu = 1` it does not.** `u_eff` moves in the right direction and is the
+  single largest contributor, but it accounts for only 48.4% of the gap --
+  roughly half. Under heavy tails something beyond the per-element relative
+  error is contributing to `median(BE)`'s block-size dependence.
+
+The `u_eff` ratio is smoothly monotone in tail weight across the full grid
+(1.022 at the Gaussian end rising to 1.155 at `nu = 1`), so the discrepancy at
+`nu = 1` is not a ragged or noisy point -- it is a systematic shortfall that
+grows as tails get heavier. **What that missing half is was not measured here.**
+A plausible candidate, untested: `BE` weights each element's error by
+`|a_k||b_k|`, so it is not the *unweighted* per-element error distribution that
+`measure_u_eff` reports, and under heavy tails the weighting concentrates on
+exactly the outlier elements whose blocks behave worst. Confirming or
+dismissing that needs a weighted `u_eff`, which was not run.
+
+**Consequence for the bound, stated as a constraint and not as a design:** a
+bound of the form `constant * u_eff * f(n)`, with `u_eff` carrying the whole
+block-size dependence and `f(n)` carrying none, is consistent with the data at
+`nu = 30` and **not** consistent with it at `nu = 1`. Which way to resolve that
+-- accept the shortfall as conservatism, measure the weighted `u_eff` first, or
+let the bound's block-size dependence live somewhere other than `u_eff` -- is
+the decision under review, and this section deliberately does not take it.
+
+### Result 3: other patterns worth noting
+
+**The scale format matters more than the block size, everywhere except the
+heaviest tail.** Decomposing the 2x2 into its two one-factor effects:
+
+| | 1 | 2 | 3 | 5 | 8 | 15 | 30 | gaussian |
+|---|---|---|---|---|---|---|---|---|
+| scale-format effect (E8M0/E4M3), block 16 | 1.113 | 1.144 | 1.147 | 1.141 | 1.134 | 1.130 | 1.126 | 1.124 |
+| scale-format effect (E8M0/E4M3), block 32 | 1.100 | 1.128 | 1.135 | 1.129 | 1.117 | 1.105 | 1.097 | 1.091 |
+| block-size effect (32/16), E8M0 | 1.155 | 1.120 | 1.092 | 1.066 | 1.049 | 1.034 | 1.029 | 1.022 |
+| block-size effect (32/16), E4M3 | 1.169 | 1.136 | 1.104 | 1.077 | 1.066 | 1.057 | 1.056 | 1.053 |
+
+The scale-format effect is large (E4M3-with-a-global-scale resolves 9-15%
+better than E8M0) and roughly **flat in `nu`**. The block-size effect is
+strongly **`nu`-dependent**, small near the Gaussian end (2-5%) and growing to
+16-17% at `nu = 1`. The two are comparable in size only at `nu = 1`; for
+`nu >= 3` the scale format dominates. Note this is a statement about `u_eff`
+alone and carries no implication for H1, which is a claim about where the
+*bound breaks*, not about which format has the smaller per-element error.
+
+**The two controls cross.** `(32, E4M3+global)` resolves *worse* than
+`(16, E8M0)` at `nu = 1` (0.142980 against 0.136158) and *better* at every
+other tested `nu` (0.098980 against 0.105679 at the Gaussian end). The
+crossing falls between `nu = 1` and `nu = 2`. So which of block size and scale
+format wins is itself tail-dependent, which is precisely the interaction the
+2x2 exists to expose -- and it is visible in `u_eff` directly, before any GEMM.
+
+**NVFP4 has the lowest `u_eff` of the four at every `nu`**, and MXFP4 the
+highest. That is the two factors compounding rather than either one alone:
+NVFP4 is the small block *and* the finer scale format, MXFP4 the large block
+*and* the coarser one. The MXFP4/NVFP4 ratio is 1.149 at the Gaussian end and
+1.286 at `nu = 1`.
+
+### What this does not settle
+
+* **No bound is defined here** and no functional form is proposed. The one
+  thing the data constrain is stated above as a constraint.
+* **The `nu = 1` shortfall is unexplained**, and the weighted-`u_eff`
+  conjecture offered for it is a conjecture, not a measurement.
+* **The near-zero policy materially affects every number.** It is the
+  defensible cut, but it is a cut; the surviving fractions are tabulated so
+  that any downstream use has to confront them.
+* **Scope.** One tensor shape `(64, 1024)`, E2M1 elements, RTNE only, no RHT,
+  four configurations, the eight-value `nu` grid, exact arithmetic throughout.
+  Nothing about block sizes 8 and 64, stochastic rounding, the RHT, or real
+  activations.
+* **It closes no PREREGISTRATION.md item.** The element budget, the tensor
+  shape, the near-zero threshold and the 75% reporting threshold are diagnostic
+  choices, not frozen commitments; none is a dated amendment under section 8.

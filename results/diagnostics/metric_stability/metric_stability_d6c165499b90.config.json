@@ -1,0 +1,41 @@
+{
+  "distribution": "t-student",
+  "gemm_config": {
+    "accum": "exact",
+    "block_size": 32,
+    "element_format": "e2m1",
+    "preset": "mxfp4",
+    "rht": false,
+    "round_mode": "rtne",
+    "scale_format": "e8m0",
+    "use_global_scale": false
+  },
+  "grid_n": [
+    16,
+    256,
+    4096
+  ],
+  "grid_nu": [
+    1.0,
+    2.0,
+    3.0,
+    30.0
+  ],
+  "hill_k_fracs": [
+    0.005,
+    0.01,
+    0.02,
+    0.05,
+    0.1
+  ],
+  "hill_primary_k_frac": 0.05,
+  "n_batches": 10,
+  "out_rows": 32,
+  "script": "check_metric_stability.py",
+  "seed": 0,
+  "subsample_top": 4000,
+  "subsample_uniform": 4000,
+  "top_frac": 0.001,
+  "trials": 1000,
+  "version": 1
+}

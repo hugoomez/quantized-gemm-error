@@ -688,3 +688,154 @@ project develops.
 - All results written to Parquet via the
   `sweep_{sha256(config)[:12]}.parquet` convention, with the full config
   saved alongside.
+
+## Metric stability diagnostic -- PROPOSED, pending review
+
+**Status: a proposal, not a decision.** Nothing in this section is implemented
+anywhere in the codebase; `qgemm.metrics` is unchanged and
+PREREGISTRATION.md §7 item 3 (the primary error metric) stays open. It decides
+how every later result is reported, so it needs human review before it is
+locked in. Everything above this heading is unaffected by it.
+
+Produced by `scripts/check_metric_stability.py` (one run, no manual steps);
+data and figures under
+`results/diagnostics/metric_stability/metric_stability_d6c165499b90*`, the
+digest being the sha256 of the run config saved alongside.
+
+### What was measured
+
+The candidate primary metric, per output element:
+
+    BE_ij = |(A @ B)_ij - qgemm(A, B, config)_ij| / (|A| @ |B|)_ij
+
+over `nu in {1, 2, 3, 30}` (t-Student degrees of freedom) x `n in {16, 256,
+4096}` (contraction dimension), 1000 independent trials per cell, 32x32 output
+per trial = 1 024 000 `BE` values per cell. Quantization active throughout, in
+the **MXFP4 preset** (`GemmConfig()` defaults: block 32, E8M0 scale, no global
+scale, E2M1 elements, RTNE, no RHT, `accum="exact"`). At `n = 16` a block-32
+quantizer has a single *short* 16-element block by the tail policy above, so
+that cell's block structure differs from the others by construction.
+
+The concern being tested was that numerator and denominator are built from the
+same `A`, `B`, and that a denominator with mass near zero could give the ratio
+a heavier tail than either input has on its own.
+
+### Recommendation: keep raw `BE` as the primary metric, at every tested n
+
+**Raw `BE` is usable, including at n = 16.** The `log(BE)` fallback is not
+needed as the primary reporting metric and is proposed only as a plotting
+transform (the histograms are legible on no other axis) and as a secondary
+descriptive summary. Two consequences worth stating plainly, because they are
+what a reader will check:
+
+- The median of `BE` and the "geometric median" are the **same number** -- the
+  median is invariant under the monotone map `log`, so `median(BE) =
+  exp(median(log BE))`. Since PREREGISTRATION.md §3 already specifies a
+  bootstrap CI of the **median** of the ratio, the metric-stability question
+  never bore on that statistic's existence. What it bore on is whether
+  *mean-like* summaries of `BE` are admissible at all, and whether the median
+  is estimable stably enough to bootstrap. Both hold; see below.
+- `BE` is right-skewed, with `mean / median` between 1.18 and 1.62 across the
+  grid. Mean and median are therefore both well-defined but **not
+  interchangeable as descriptions**, and any table must say which it reports.
+
+### Why -- what steps 3 and 4 actually showed
+
+**Step 3, the denominator has no mass near zero -- measured, not inferred.**
+Normalized by its own median, `(|A| @ |B|)_ij` never came near zero in any
+cell. Worst case is the highest-risk corner `nu = 1, n = 16`: over 1.024M
+samples the smallest denominator observed was `0.031 x median`, and
+`P(D < 0.1 x median) = 9.6e-4`. In every other cell that probability is at
+most `9.8e-7`, and `P(D < 0.01 x median) = 0` in **all twelve cells**. The
+mechanism is structural rather than lucky: the denominator is a sum of
+non-negative terms, so heavy operand tails push it *up*, never toward zero --
+visible in the same figure as a right tail spanning four decades at `nu = 1`
+against a left edge that stops at a third of the median.
+
+**Step 3, attribution -- the ratio's tail is inherited from the numerator, and
+the denominator damps it.** For the top 0.1% of `BE` values, the median
+percentile rank of their own denominator is 0.46-1.00 in eleven of twelve
+cells: the largest ratios occur where the numerator is extreme *and the
+denominator is simultaneously large*, not where the denominator collapsed. The
+counterfactual makes the size of the damping concrete -- dividing the same
+numerators by a *fixed* denominator gives a spread of `1.4e6 x median` at
+`nu = 1, n = 16`, where the actual ratio's spread is `13 x median`.
+
+**Step 4, the tail index -- the ratio is lighter-tailed than its own
+numerator, not worse.** Hill estimates for `BE` land in `[2.80, 5.97]` with
+the lowest 95% CI bound over the grid at 2.77, so the mean (needs `alpha > 1`)
+and the variance (needs `alpha > 2`) both exist at every tested `(nu, n)`. For
+contrast, the **numerator alone** has `alpha = 0.92, 0.97, 0.98` at
+`nu = 1` for `n = 16, 256, 4096` -- no finite mean. The max-to-sum ratios say
+the same thing without any choice of tail fraction: `R_1(m)` and `R_2(m)` for
+`BE` decay like `1/m` in all twelve cells, while the numerator's `R_1` at
+`nu = 1` plateaus around 0.1-1 across six decades of sample size. Dividing by
+`(|A| @ |B|)` is what removes the operand-scale heavy tail.
+
+**The underlying reason, which is why this should generalize past the sampled
+grid.** Under `accum="exact"`, with `d_i` the relative error of the quantized
+product `a_i b_i`,
+
+    |sum_i (a_i b_i - qa_i qb_i)| <= max_i d_i * sum_i |a_i b_i|
+
+so `BE <= max_i d_i`, and the format bounds that: an element that survives
+quantization keeps its magnitude to within the E2M1 grid, and an element that
+flushes to zero loses at most its own contribution. `BE` is therefore
+**bounded**, not merely light-tailed, and a bounded statistic cannot have a
+divergent moment. Empirically `be_max` ranges from 0.021 to 1.59 over the
+whole grid, with the sharp right edge visible in every histogram panel.
+*Caveat on reading the Hill numbers:* applied to a bounded variable, Hill
+describes how the sample approaches its ceiling and is not evidence of a
+Pareto tail. The `alpha` values above should be quoted only for what they
+support -- no divergence -- and not as a tail exponent of a power law.
+
+**Estimator stability, at the trial level.** Across ten disjoint batches of
+100 trials (the resampling unit fixed in PREREGISTRATION.md §3.2), the
+batch-to-batch spread (max/min) is 1.007-1.059 for the mean, 1.011-1.034 for
+the median, and 1.010-1.040 for the geometric mean. All three are stable at
+1000 trials; the median is the most stable of the three at `nu = 1`, which is
+one more reason not to disturb the preregistered choice.
+
+### Does the answer differ between n = 16 and larger n?
+
+**The verdict is the same at all three n -- but the margin is not, and the
+difference should be reported rather than papered over.** `n = 16` is the
+loosest corner on every step-3 measure, exactly as predicted: the
+denominator's interquartile ratio falls from 4.17 (`n = 16`) to 2.08
+(`n = 4096`) at `nu = 1`, and its observed minimum rises from `0.031 x median`
+to `0.33 x median` over the same range. `n = 16` is also the only n where any
+cell shows a denominator-driven contribution to the `BE` tail at all: at
+`nu = 30, n = 16` the top-0.1% `BE` values sit at a median denominator rank of
+0.20, with 8.2% of them below the denominator's own 1st percentile. Even
+there, `P(D < 0.1 x median) = 0`, `be_max / median = 11.5`, and `alpha = 5.61`
+-- the effect is visible but far from pathological, and no cell fails on any
+criterion.
+
+So: one verdict, with `n = 16` flagged as the corner to re-check if the design
+changes -- particularly for a genuine block-16 configuration, since the
+`n = 16` cell measured here is a *short* block-32 block covering the entire
+contraction dimension, not a block-16 quantizer.
+
+### Scope -- what this diagnostic does not cover
+
+Measured only for MXFP4, RTNE, `accum="exact"`, no RHT, t-Student operands at
+the four `nu` above, and a 32x32 output. Three gaps matter and are not closed
+by these data:
+
+- **`accum="bf16"`.** The boundedness argument above is specific to the exact
+  route, where the residual is input-quantization error alone. Accumulation
+  error is not bounded by `max_i d_i * sum_i |a_i b_i|` in the same way, so
+  the bf16 ablation needs its own check before `BE` is reported for it.
+- **RHT on.** With the transform active the numerator is built from the
+  *transformed* operands while this denominator is built from the original
+  ones, so the bound picks up a factor `(|H'A| @ |H'B|) / (|A| @ |B|)` that
+  the RHT can push above 1. Whether `BE` is reported against the original or
+  the transformed operands is a definition choice that this diagnostic did not
+  make.
+- **NVFP4 and the block-size controls.** Only the MXFP4 preset was run. The
+  E4M3 scale path has a NaN clamp and a global scale that this diagnostic
+  never exercised.
+
+To reproduce: `python scripts/check_metric_stability.py` (about three minutes;
+`--trials`, `--out-rows` and `--seed` are the only knobs, and changing any of
+them changes the config digest and therefore the output filenames).

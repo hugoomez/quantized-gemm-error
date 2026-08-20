@@ -77,6 +77,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
 import matplotlib
 
@@ -89,6 +90,7 @@ from tqdm import tqdm  # noqa: E402
 
 from qgemm.gemm import GemmConfig, qgemm  # noqa: E402
 from qgemm.metrics import backward_error  # noqa: E402
+from qgemm.stats import median_absolute_deviation  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = REPO_ROOT / "results" / "diagnostics" / "metric_stability"
@@ -121,19 +123,35 @@ LOG_BE_EDGES = np.linspace(-10.0, 1.0, 111)  # log10(BE) histogram bins
 LOG_DEN_EDGES = np.linspace(-4.0, 8.0, 121)  # log10(D / median D) histogram bins
 
 
-def sample_t(shape: tuple[int, ...], nu: float, rng: np.random.Generator) -> np.ndarray:
+def sample_t(
+    shape: tuple[int, ...],
+    nu: float,
+    rng: np.random.Generator,
+    normalize: Literal["mad"] | None = None,
+) -> np.ndarray:
     """Standard t-Student(nu) sample, float64.
 
     Deliberately local to this script rather than added to
     `qgemm.distributions`: this is a diagnostic, and the nu-axis sampler is a
     piece of study infrastructure that PREREGISTRATION.md R15 wants
     implemented and tested on its own terms, not smuggled in through a
-    diagnostic. No rescaling is applied -- `BE` is a ratio that is invariant to
-    a common rescaling of the operands up to the quantizer's own grid, and for
-    nu <= 2 the variance that a rescaling would normalize does not exist
-    anyway.
+    diagnostic. No rescaling is applied by default -- `BE` is a ratio that is
+    invariant to a common rescaling of the operands up to the quantizer's own
+    grid, and for nu <= 2 the variance that a rescaling would normalize does
+    not exist anyway.
+
+    `normalize="mad"` is an opt-in, additive to that default: it rescales the
+    whole tensor so its MAD is 1, isolating tail-shape differences across nu
+    from raw-scale differences (SPEC.md, "Cross-distribution normalization").
+    It is for the production sweep going forward, not this diagnostic's own
+    measurements, which used the unnormalized default.
     """
-    return np.asarray(rng.standard_t(nu, size=shape), dtype=np.float64)
+    x = np.asarray(rng.standard_t(nu, size=shape), dtype=np.float64)
+    if normalize is None:
+        return x
+    if normalize == "mad":
+        return x / median_absolute_deviation(x)
+    raise ValueError(f"unknown normalize {normalize!r}; expected None or 'mad'")
 
 
 def config_digest(config: dict) -> str:

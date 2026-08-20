@@ -923,3 +923,79 @@ def test_quantize_blocked_round_mode_reaches_the_elements(scale_format):
 
     stochastic = quantize_blocked(x, **kwargs, round_mode="sr", rng=np.random.default_rng(0))
     assert not np.array_equal(stochastic, quantize_blocked(x, **kwargs))
+
+
+# =============================================================================
+# Scale invariance under a common rescaling (SPEC.md, "Cross-distribution
+# normalization"). Quantifies whether quantize_blocked(c*x) equals
+# c*quantize_blocked(x), rather than only asserting pass/fail -- see SPEC.md
+# for the full report and the mechanism behind each result.
+# =============================================================================
+
+# The causal 2x2 the invariance question is about: block_size in {16, 32} x
+# scale_format in {"e8m0", "e4m3"}, i.e. MXFP4, NVFP4 and their two Step-1.5
+# controls -- not a special case of either preset alone.
+_INVARIANCE_CONFIGS = (
+    ("block16_e8m0", {"block_size": 16, "scale_format": "e8m0", "use_global_scale": False}),
+    ("block32_e4m3", {"block_size": 32, "scale_format": "e4m3", "use_global_scale": True}),
+    ("block16_e4m3_nvfp4", {"block_size": 16, "scale_format": "e4m3", "use_global_scale": True}),
+    ("block32_e8m0_mxfp4", {"block_size": 32, "scale_format": "e8m0", "use_global_scale": False}),
+)
+_POWERS_OF_TWO = (2.0, 4.0, 0.5)
+_NON_POWERS_OF_TWO = (1.5, 3.0, 7.0)
+
+
+def _relative_discrepancy(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Elementwise `|a - b| / |b|`, with a zero denominator substituted by 1."""
+    denom = np.where(np.abs(b) == 0.0, 1.0, np.abs(b))
+    return np.abs(a - b) / denom
+
+
+def test_scale_invariance_under_global_rescaling():
+    """Report and check `quantize_blocked(c*x)` against `c*quantize_blocked(x)`.
+
+    Two things are confirmed empirically, and one contradicts the a priori
+    guess that motivated this test -- see SPEC.md for the full writeup:
+
+    * At an exact power of two, every configuration is bit-for-bit exact,
+      regardless of scale format. Multiplying by an exact power of two is a
+      pure exponent shift at every step float64 performs along the way (amax,
+      the e8m0/e4m3 scale-grid rounding, and the global scale where present),
+      so it commutes exactly with every rounding step in the pipeline.
+    * At a non-power-of-two c, the two e8m0 (no global scale) configurations
+      show a large, easily measurable discrepancy: with no global scale to
+      absorb the rescaling, a non-power-of-two c generally changes which
+      power-of-two exponent the block scale rounds to.
+    * At a non-power-of-two c, the two e4m3-with-global-scale configurations
+      (this includes NVFP4) do **not** show the "small but nonzero"
+      discrepancy hypothesized going in -- they stay at the float64 rounding
+      noise floor (~1e-16), indistinguishable from exact on this data. The
+      global scale is a raw float64, not on any grid, so it cancels a common
+      rescaling in the ratio fed to `quantize_e4m3` up to ordinary
+      floating-point noise; E4M3's ~3-bit mantissa is far too coarse a grid
+      for noise at that level to ever cross a rounding boundary.
+    """
+    x = _spread_tensor()
+    report: list[str] = []
+
+    for name, kwargs in _INVARIANCE_CONFIGS:
+        base = quantize_blocked(x, **kwargs)
+        for c in (*_POWERS_OF_TWO, *_NON_POWERS_OF_TWO):
+            scaled = quantize_blocked(c * x, **kwargs)
+            target = c * base
+            rel = _relative_discrepancy(scaled, target)
+            is_pow2 = c in _POWERS_OF_TWO
+            report.append(
+                f"{name:<20} c={c:>5}  pow2={is_pow2!s:<5}  "
+                f"max_rel={rel.max():.3e}  mean_rel={rel.mean():.3e}  "
+                f"exact={np.array_equal(scaled, target)!s}"
+            )
+
+            if is_pow2:
+                assert np.array_equal(scaled, target), (name, c, rel.max())
+            elif kwargs["scale_format"] == "e8m0":
+                assert rel.max() > 1e-6, (name, c, rel.max())
+            else:
+                assert rel.max() < 1e-10, (name, c, rel.max())
+
+    print("\n" + "\n".join(report))

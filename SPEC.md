@@ -2235,3 +2235,135 @@ whether the honest answer is "re-measure on a quieter machine before
 deciding" given how much the single-process cost model swung between the two
 five-run batches, is a human call, to be made **before** anything is
 launched -- not made here.
+
+## Cross-distribution normalization (🧠2) — RESOLVED
+
+**Decision.** Every sample generated for the production sweep going forward
+(Phase 3.3 onward) is normalized so its MAD (median absolute deviation) is 1,
+computed **once over the full generated tensor** -- not per row, not per
+block -- before quantization.
+
+**Why MAD, not standard deviation.** Standard deviation is undefined for
+t-Student(nu) at nu<=2 (Cauchy included), which is inside this project's own
+nu grid (`nu=1` is the heaviest-tailed point swept). MAD is well-defined for
+every nu, including nu=1, and gives every distribution in the sweep the same
+scale before quantization, so that differences measured across nu reflect
+**tail shape**, not an accident of raw draw scale. This is what Phase 3.3
+onward needs and what the diagnostics run so far did not: they were resolving
+🧠1's functional form (n-dependence, block-size level gap), a question that
+does not turn on cross-nu scale comparability.
+
+**Why per-tensor, not per-row or per-block.** The normalization exists to put
+different nu on a common footing *before* block-scaled quantization does
+anything -- normalizing per-block would fold the normalization into the very
+block structure the study varies, confounding the two. A single per-tensor MAD
+leaves the tensor's internal block-to-block dynamic range untouched.
+
+**Scope boundary -- explicit, not implicit.** This applies to the production
+sweep going forward (Phase 3.3 onward) only. It is **not** applied
+retroactively to the already-committed `measure_u_eff.py` / n-scaling-probe
+diagnostics, which used raw (unnormalized) scale for a different purpose --
+resolving 🧠1's functional form -- and whose numbers in this document stand as
+measured. Nothing above this section is affected by this decision.
+
+**What landed in code.**
+
+* `qgemm.stats.median_absolute_deviation(x)` -- `median(|x - median(x)|)`,
+  float64 in, float64 out. Tests in `tests/test_stats.py`, including a
+  known-answer case and a check that it stays finite on a Cauchy sample where
+  `np.std` is dominated by rare extreme draws (ratio ~406x on the tested
+  sample) -- the concrete reason MAD is usable here and std is not.
+* `normalize="mad"` -- an explicit opt-in parameter, default `None` -- added
+  to `qgemm.distributions.sample_gaussian` and `sample_uniform`. The default
+  path is unchanged: a regression test (`tests/test_distributions.py`) pins
+  the unnormalized output as byte-identical to the pre-existing behavior, so
+  every script that calls these without `normalize` (unchanged) is
+  unaffected.
+* The nu-axis sampler, `sample_t`, still does **not** live in
+  `qgemm.distributions` -- it remains deliberately local to
+  `scripts/check_metric_stability.py`, per PREREGISTRATION.md R15 ("a piece of
+  study infrastructure ... not smuggled in through a diagnostic"). This
+  decision does not resolve R15 and does not move it; whether/when to promote
+  `sample_t` into `qgemm.distributions` is still open. The same opt-in
+  `normalize="mad"` parameter (default `None`, same regression guarantee) was
+  added to that local `sample_t`, tested in
+  `tests/test_check_metric_stability.py` across the project's full nu grid
+  (`1, 2, 3, 5, 8, 15, 30`), so every existing importer of it
+  (`measure_u_eff.py`, `probe_n_scaling.py`, `sanity_reproduce_2408.py`,
+  `run_sweep.py`) picks up the option automatically without any change to its
+  own default behavior.
+
+### Scale invariance under a common rescaling -- quantified, not pass/fail
+
+The other question 🧠2 raised: is block-scaled quantization homogeneous of
+degree 1 under a global rescaling -- does `quantize_blocked(c*x)` equal
+`c*quantize_blocked(x)`? Measured directly rather than assumed, in
+`tests/test_blocks.py::test_scale_invariance_under_global_rescaling`, over
+this project's causal 2x2 (`block_size in {16, 32}` x
+`scale_format in {"e8m0", "e4m3"}` -- MXFP4, NVFP4 and their two Step-1.5
+controls, `use_global_scale` following scale format per the project's
+established pairing), on one fixed spread tensor (`_spread_tensor()`: 4x64,
+log-normal magnitudes, seed 20260820), for `c` in `{2, 4, 0.5}` (exact powers
+of two) and `{1.5, 3, 7}` (not):
+
+| configuration | c | power of 2? | max relative discrepancy | mean relative discrepancy | bit-exact? |
+|---|---|---|---|---|---|
+| block16_e8m0 (control) | 2.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block16_e8m0 (control) | 4.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block16_e8m0 (control) | 0.5 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block16_e8m0 (control) | 1.5 | no  | 4.000e+00 | 1.484e-01 | no |
+| block16_e8m0 (control) | 3.0 | no  | 8.000e+00 | 1.992e-01 | no |
+| block16_e8m0 (control) | 7.0 | no  | 1.000e+00 | 7.719e-02 | no |
+| block32_e8m0 (MXFP4) | 2.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block32_e8m0 (MXFP4) | 4.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block32_e8m0 (MXFP4) | 0.5 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block32_e8m0 (MXFP4) | 1.5 | no  | 1.600e+01 | 2.444e-01 | no |
+| block32_e8m0 (MXFP4) | 3.0 | no  | 3.200e+01 | 4.201e-01 | no |
+| block32_e8m0 (MXFP4) | 7.0 | no  | 1.000e+00 | 5.078e-02 | no |
+| block32_e4m3 (control) | 2.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block32_e4m3 (control) | 4.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block32_e4m3 (control) | 0.5 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block32_e4m3 (control) | 1.5 | no  | 4.277e-16 | 6.219e-17 | no |
+| block32_e4m3 (control) | 3.0 | no  | 4.277e-16 | 6.219e-17 | no |
+| block32_e4m3 (control) | 7.0 | no  | 2.716e-16 | 4.514e-17 | no |
+| block16_e4m3 (NVFP4) | 2.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block16_e4m3 (NVFP4) | 4.0 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block16_e4m3 (NVFP4) | 0.5 | yes | 0.000e+00 | 0.000e+00 | yes |
+| block16_e4m3 (NVFP4) | 1.5 | no  | 4.277e-16 | 8.651e-17 | no |
+| block16_e4m3 (NVFP4) | 3.0 | no  | 4.277e-16 | 8.651e-17 | no |
+| block16_e4m3 (NVFP4) | 7.0 | no  | 2.716e-16 | 6.214e-17 | no |
+
+**At an exact power of two, every configuration is bit-for-bit exact,
+regardless of scale format.** Multiplying by an exact power of two is a pure
+exponent shift at every step float64 performs along the pipeline -- `amax`,
+the e8m0/e4m3 scale-grid rounding, and the global scale where present -- so it
+commutes exactly with every rounding step. This matches what was expected
+going in for both scale formats.
+
+**At a non-power-of-two c, the two e8m0 (no global scale) configurations show
+a large, easily measurable discrepancy**, also as expected: with no global
+scale to absorb the rescaling, a non-power-of-two `c` generally changes which
+power-of-two exponent the block scale rounds to, and that is not a rounding
+artifact -- it is a genuinely different quantization grid.
+
+**At a non-power-of-two c, the two e4m3-with-global-scale configurations
+(this includes NVFP4 itself) do *not* show the "small but nonzero"
+discrepancy hypothesized going in.** Measured discrepancy stays at the
+float64 rounding noise floor (~1e-16 relative, i.e. a handful of ULPs) --
+indistinguishable from exact on this data, not a meaningfully larger "small"
+effect. The mechanism: the global scale is a raw float64, not on any grid, so
+it exactly cancels a common rescaling in the ratio fed to `quantize_e4m3` up
+to ordinary floating-point rounding noise; E4M3's ~3-bit mantissa is a grid
+far too coarse for noise at the 1e-16 level to ever cross a rounding boundary
+on data like this. **This is reported plainly as a finding that diverges from
+the a priori expectation, not forced into the expected shape.** The
+discrepancy is not exactly zero in the bit-for-bit sense e8m0's power-of-two
+case is, but it is zero for every practical purpose on this project's data.
+
+**Caveat on the measure itself, not the property.** The relative-discrepancy
+metric divides by the target reconstruction, so it can be inflated by
+elements whose reconstruction sits near zero in one arm and not the other --
+this is a property of the relative-error measure at a small denominator, not
+of the underlying invariance question, and it is why some of the e8m0 rows
+above (e.g. `1.6e+01` max relative discrepancy) look larger than the mean
+discrepancy for the same row would suggest.

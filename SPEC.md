@@ -1722,6 +1722,46 @@ NVFP4 is the small block *and* the finer scale format, MXFP4 the large block
 *and* the coarser one. The MXFP4/NVFP4 ratio is 1.149 at the Gaussian end and
 1.286 at `nu = 1`.
 
+### Post-hoc: the near-zero cut is not neutral between the two arms
+
+Read back out of the same run's survival fractions, no new sampling. With the
+scale format held at E8M0, block 32 loses far more elements to the flush
+threshold than block 16 does, and the gap between them grows sharply with tail
+weight:
+
+| | 1 | 2 | 3 | 5 | 8 | 15 | 30 | gaussian |
+|---|---|---|---|---|---|---|---|---|
+| surviving, block 32 | 0.360 | 0.678 | 0.780 | 0.838 | 0.863 | 0.879 | 0.887 | 0.893 |
+| surviving, block 16 | 0.517 | 0.762 | 0.829 | 0.868 | 0.884 | 0.894 | 0.898 | 0.902 |
+| gap (16 - 32) | 0.1565 | 0.0834 | 0.0491 | 0.0298 | 0.0208 | 0.0149 | 0.0116 | 0.0093 |
+
+The gap is monotone in `nu` over the whole grid -- 16.9x larger at `nu = 1`
+than at the Gaussian end, 13.5x larger than at `nu = 30` -- and its rank order
+against the `u_eff` block-size excess is perfect across all eight `nu`
+(Spearman 1.000; Pearson 0.957, or 0.987 on logs).
+
+**Does it track the unexplained shortfall? Directionally yes, proportionally
+no, and the comparison rests on two points.** The shortfall is only defined
+where the n-scaling probe measured a `BE` level ratio, i.e. at `nu = 1` and
+`nu = 30` alone, so no correlation across the grid can be computed for it and
+none is claimed here: two points are always perfectly correlated. At those two
+points both quantities are larger at `nu = 1`, but by very different factors --
+the shortfall grows 3.1x from `nu = 30` to `nu = 1` (16.6% unexplained to
+51.6%) while the survival gap grows 13.5x. Since essentially every quantity in
+this measurement increases with tail weight, a matching *direction* at two
+points is weak evidence and is reported as such.
+
+What the survival gap does establish, independently of that, is a **caveat on
+the level-gap check itself**: the near-zero cut removes 64% of block-32
+elements at `nu = 1` against 48% of block-16 elements, so `u_eff` is being
+compared between two arms whose surviving subsets differ substantially, and the
+arm that flushes more has more of its worst-resolved elements removed. That is
+the right sign to make `u_eff` under-report block 32's disadvantage, which is
+the direction of the shortfall. This is a mechanism consistent with the data,
+**not** a measurement of one -- confirming it would require a `u_eff` variant
+that accounts for the flushed elements rather than excluding them, which was
+not run.
+
 ### What this does not settle
 
 * **No bound is defined here** and no functional form is proposed. The one

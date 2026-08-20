@@ -2048,7 +2048,17 @@ unchanged by the cut.
 Grid total: **712 cells, 1,780,000 trials** (was 1352 cells / 3,380,000
 trials before the cut).
 
-### Dry-run timing estimate (post-cut, real multiprocessing measured)
+### Dry-run timing estimate (post-cut, real multiprocessing measured) -- SUPERSEDED, see below
+
+**Superseded by "Dry-run timing estimate, retimed after the `apply_rht` fix"
+below.** The 32 sampled-around cells this section describes were not merely
+excluded from the real-multiprocessing *sample* -- had a real sweep run
+attempted them, they would have crashed outright (the `apply_rht` bug fixed
+above), so the measurement below was necessarily built from an incomplete
+picture of the grid's real cell types: it never actually executed the
+`rht=true, n<block_size` corner, only modeled its cost arithmetically. Kept
+here, unedited, as the historical record of what was measured before the fix;
+not to be read as the current estimate.
 
 Produced by `python scripts/run_sweep.py --dry-run`. Two independent
 measurements feed the report, and they are not the same kind of number:
@@ -2141,17 +2151,87 @@ measured demonstration that "ideal scaling" is not a safe assumption here in
 either direction, which is exactly why the task asked for a real measurement
 instead of one.
 
-**Verdict: this does NOT reliably clear the 8h gate, and is not a clean
-pass.** The MEASURED headline figure exceeded 8h in 1 of 5 independent runs
-(8.12h); the cross-check exceeded it in 2 of 5 (8.49h, 9.09h); and even the
-serial (single-core) estimate -- which exceeded 8h in every one of the five
-pre-cut runs -- now clears it in 2 of 5 post-cut runs. The cut roughly halved
-the grid's compute as expected, but the honest read of five independent
-measurements is "genuinely borderline, could go either way on a given
-invocation," not "clears with margin." Per this step's own instructions, if
-the measured estimate exceeds 8h that is reported plainly and this stops
-here: **it exceeded 8h at least once, so no further cut is applied or decided
-in this step.** Whether the block_size cut alone is sufficient, or whether a
-second cut (or accepting the risk, or a controlled/quieter benchmarking
-environment) is warranted, is a human call, to be made **before** anything is
+**Verdict (superseded -- see below): this does NOT reliably clear the 8h
+gate, and is not a clean pass.** The MEASURED headline figure exceeded 8h in
+1 of 5 independent runs (8.12h); the cross-check exceeded it in 2 of 5
+(8.49h, 9.09h); and even the serial (single-core) estimate -- which exceeded
+8h in every one of the five pre-cut runs -- now clears it in 2 of 5 post-cut
+runs. The cut roughly halved the grid's compute as expected, but the honest
+read of five independent measurements is "genuinely borderline, could go
+either way on a given invocation," not "clears with margin." Per this step's
+own instructions, if the measured estimate exceeds 8h that is reported
+plainly and this stops here: **it exceeded 8h at least once, so no further
+cut is applied or decided in this step.** Whether the block_size cut alone is
+sufficient, or whether a second cut (or accepting the risk, or a
+controlled/quieter benchmarking environment) is warranted, is a human call,
+to be made **before** anything is launched -- not made here.
+
+### Dry-run timing estimate, retimed after the `apply_rht` fix (2026-08-20)
+
+**All 640 main-grid cells are now executable** (`scripts/run_sweep.py`'s
+`cell_is_executable` now returns `True` for every cell in this grid --
+verified, not assumed, since the check still tests the real remaining
+constraint rather than being hardcoded). The real-multiprocessing sample can
+therefore draw from the full grid, including the 32 `rht=true, n=16,
+block_size=32` cells the previous measurement above could only model
+arithmetically, never actually run. Same methodology otherwise: 32 real
+cells evenly spaced across the grid's iteration order, `150` trials each,
+`multiprocessing.Pool(processes=n_cores)`, one process per cell with its own
+RNG state, five independent isolated invocations at production defaults.
+
+```
+run   serial (cost model)   parallel, MEASURED (headline)   parallel, cross-check   efficiency
+1            9.69 h                   3.73 h                       4.11 h              21.7%
+2          128.61 h  <- EXCEEDS       9.11 h  <- EXCEEDS           12.33 h <- EXCEEDS  117.6%
+3          106.74 h  <- EXCEEDS       5.37 h                        6.57 h             165.5%
+4          155.38 h  <- EXCEEDS       4.26 h                        5.59 h             304.0%
+5            7.08 h                   5.68 h                        6.04 h              10.4%
+
+serial:            range [7.08, 155.38] h, median 106.74 h -- 4 of 5 runs now EXCEED 8h (was 3 of 5 pre-fix)
+measured parallel:  range [3.73, 9.11] h,   median  5.37 h -- straddles the gate (1 of 5 exceeds, same as pre-fix)
+cross-check:        range [4.11, 12.33] h,  median  6.04 h -- straddles the gate (1 of 5 exceeds, was 2 of 5 pre-fix)
+measured efficiency: range [10.4%, 304.0%], median 117.6%
+```
+
+**A new observation, disclosed rather than smoothed over: measured parallel
+efficiency exceeded 100% in 3 of the 5 runs (117.6%, 165.5%, 304.0%),
+something the pre-fix measurement never saw (max 119.2%, and only barely).**
+Efficiency above 100% is not real multiprocessing execution beating
+theoretical serial-time-divided-by-cores -- that is not physically
+meaningful for a fair comparison -- it means the *single-process cost model*
+phase (which runs first, in a tight loop, ~10-20 timed calls per point) read
+unusually high relative to the real Pool measurement that follows it in the
+same invocation. This session's machine shows more single-process noise than
+the previous session's (pre-cut) five runs did: serial estimates now reach
+155h against a prior ceiling of 102.5h. Whether that is accumulated
+background load, thermal effects from the extended single-process timing
+loop itself, or something else was not investigated -- it is reported as an
+observed instability of the *cost-model* half of this measurement on this
+shared machine, not of the real-multiprocessing half, which is what the
+MEASURED headline figure is actually built from (via the efficiency
+correction) and cross-checked against directly.
+
+**Comparing to the pre-fix numbers: the headline verdict is essentially
+unchanged.** Measured-parallel median moved from 5.34h to 5.37h; the 8h
+overrun rate stayed at 1 of 5 runs for the headline figure. This is
+expected, not a surprise to be explained away: the 32 previously-crashing
+cells are only 5% of the grid (32/640), so their addition to the sample pool
+(a ~5% chance of landing in any given 32-cell draw) was never going to move
+the aggregate by much on its own. **The value of the fix is correctness, not
+a materially different timing picture** -- the grid can now actually be run
+as specified, which it structurally could not before, and the real-
+multiprocessing sample is no longer built from an artificially incomplete
+picture of the grid's cell types.
+
+**Verdict, updated: still does NOT reliably clear the 8h gate.** The
+MEASURED headline figure exceeded 8h in 1 of 5 runs (9.11h); the cross-check
+exceeded it in 1 of 5 (12.33h); the serial estimate now exceeds 8h in 4 of 5
+runs (worse than pre-fix, consistent with the cost-model noise observation
+above, not with any change to the grid itself). Per this step's own
+instructions: the measured estimate exceeded 8h at least once, so this is
+reported plainly and **no further cut is applied or decided here.** Whether
+the block_size cut is sufficient, whether a further cut is warranted, or
+whether the honest answer is "re-measure on a quieter machine before
+deciding" given how much the single-process cost model swung between the two
+five-run batches, is a human call, to be made **before** anything is
 launched -- not made here.

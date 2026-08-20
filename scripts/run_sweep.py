@@ -289,21 +289,30 @@ def _run_cell_workload(args: tuple) -> float:
 
 
 def cell_is_executable(cell: dict[str, Any]) -> bool:
-    """False for a cell `qgemm` currently raises on outright.
+    """False for a cell `qgemm` would raise on outright.
 
-    Discovered empirically while building this script's real-multiprocessing
-    sample (not by inspection): `apply_rht` has no partial-block form
-    (SPEC.md, "Tail policy -- differs from quantize_blocked"), so any cell
-    with `rht=True` whose `n` is not a whole multiple of `block_size` raises
-    `ValueError` at the `qgemm()` call. This is a property of the frozen grid
-    itself (present since sweep_main.yaml was first written, not introduced
-    by the Step 3.1 block_size cut) and is reported rather than silently
-    routed around -- see SPEC.md "Sweep grid (Step 3.1)" for the count and
-    the affected cells. Whether/how to fix the grid is not decided here.
+    Historical note: before the 2026-08-20 `apply_rht` fix
+    (`qgemm.transforms._effective_block_size`), this returned False for any
+    `rht=True` cell with `n < block_size` -- discovered empirically while
+    building this script's real-multiprocessing sample, when `qgemm()`
+    raised on a sampled cell instead of just being timed. `apply_rht` now
+    falls back to a single block sized at `n` in that case (see its "Tail
+    policy"), so `n < block_size` no longer raises. The only case that
+    still does is a genuine *trailing* partial block -- `n > block_size`
+    and not a whole multiple of it -- which this grid never produces, since
+    every `n` and `block_size` it sweeps is a power of two and `n >=
+    block_size` between two powers of two is always an exact multiple. This
+    function is expected to always return True for `sweep_main.yaml`'s grid
+    now; it is kept as a real check rather than hardcoded to True so it
+    stays correct if the grid ever grows an (n, block_size) pair outside
+    that pattern.
     """
     if not cell["rht"]:
         return True
-    return cell["n"] % cell["block_size"] == 0
+    n, block_size = cell["n"], cell["block_size"]
+    if n < block_size:
+        return True  # apply_rht falls back to one block sized at n
+    return n % block_size == 0
 
 
 def _select_sample_cells(grid_cfg: dict[str, Any], sample_size: int) -> list[dict[str, Any]]:
@@ -475,13 +484,17 @@ def dry_run(
         print(
             f"\n*** FINDING (not a decision): {non_executable_cells} of {main_cell_count} "
             f"cells ({non_executable_trials:,} trials) are currently NOT EXECUTABLE -- "
-            "qgemm() raises ValueError on them (rht=True with n not a whole multiple of "
-            "block_size; apply_rht has no partial-block form). Present in the frozen grid "
-            "since sweep_main.yaml was first written, not introduced by today's block_size "
-            "cut. Excluded from the real-multiprocessing sample below (they would crash "
-            "it); their time is still counted in the cost-model totals below since the "
-            "cost model is arithmetic, not an actual qgemm() call. Whether/how to fix the "
-            "grid is not decided here -- see SPEC.md.\n"
+            "qgemm() raises ValueError on them. Excluded from the real-multiprocessing "
+            "sample below (they would crash it); their time is still counted in the "
+            "cost-model totals below since the cost model is arithmetic, not an actual "
+            "qgemm() call. Whether/how to fix this is not decided here -- see SPEC.md.\n"
+        )
+    else:
+        print(
+            f"All {main_cell_count} main-grid cells are executable "
+            "(the pre-existing rht=True/n<block_size crash -- see SPEC.md's 'Sweep grid "
+            "(Step 3.1)' -- was fixed in qgemm.transforms; nothing excluded from the "
+            "real-multiprocessing sample below)."
         )
 
     print(

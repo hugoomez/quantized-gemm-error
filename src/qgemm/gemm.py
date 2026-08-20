@@ -180,8 +180,12 @@ def rht_operands(
     a, b : np.ndarray
         float64, shapes `(M, K)` and `(K, N)`.
     block_size : int
-        Power of two dividing `K`. The RHT has no partial-block form, so a `K`
-        that is not a whole number of blocks raises `ValueError`.
+        Power of two. Normally a divisor of `K`; a `K` larger than
+        `block_size` but not a whole number of blocks raises `ValueError`
+        (the RHT has no *trailing*-partial-block form). A `K` smaller than
+        `block_size` falls back to one block spanning all of `K` instead --
+        see `qgemm.transforms.apply_rht`'s "Tail policy" for the reduced
+        spread factor that implies in that corner.
     rng : np.random.Generator
         Explicit generator; consumes one `integers` draw. Never the global RNG.
 

@@ -554,12 +554,47 @@ same `n` whose error-growth law this study sweeps, confounding the two. Keeping
 it per block leaves `block_size` as the only knob governing the transform. It
 should not be added "for completeness".
 
-**Tail policy -- differs from `quantize_blocked`.** A trailing partial block is
-*not* allowed. `quantize_blocked` keeps a short tail and gives it its own scale,
-which is well defined because a scale does not care how many elements it covers;
-a partial block has no `H'` to multiply by, and padding it would change the
-array's shape and break invertibility. A last axis that is not a whole number of
-blocks raises `ValueError`.
+**Tail policy -- differs from `quantize_blocked`, except in one corner that was
+fixed on 2026-08-20.** A *trailing* partial block (some full blocks followed by
+a short remainder, e.g. `n=100, block_size=32`) is still not allowed: unlike
+`quantize_blocked`'s short tail, which is well defined because a scale does not
+care how many elements it covers, a partial block has no `H'` to multiply by,
+and padding it would change the array's shape and break invertibility. That
+case still raises `ValueError`.
+
+**A *whole row* shorter than `block_size` is different, and is now handled.**
+`n < block_size` is unambiguous -- the entire row *is* one block, just a
+smaller one than the nominal `block_size` -- so `apply_rht` falls back to
+transforming it at its own length `n`, mirroring `quantize_blocked`'s
+short-block convention. **This was a real bug, not a documented limitation:
+`apply_rht` originally raised `ValueError` on `n < block_size` exactly as it
+does on a genuine trailing partial block, and Step 1.6's original test suite
+never exercised `block_size > n`, so it went uncaught until Step 3.1's
+real-multiprocessing dry-run measurement hit it directly on this project's own
+`(n=16, block_size=32, rht=true)` grid cells** (32 of the frozen 640-cell
+grid's cells, present since the grid was first written -- see "Sweep grid
+(Step 3.1)"). Fixed in `qgemm.transforms._effective_block_size`, general (not
+special-cased to `n=16`): the fallback size is `min(block_size, n)`, and it is
+independently re-validated as a power of two (the nominal `block_size` being a
+power of two does not guarantee `n` is, even though every `n`/`block_size`
+pair this project actually sweeps happens to be one).
+
+**The fallback has a real, physical consequence, not just a shape
+accommodation.** The RHT's spread factor is `sqrt(effective_block_size)`, so
+at `n < block_size` the achieved spread is `sqrt(n)`, strictly less than the
+`sqrt(block_size)` a full-length block would give -- an outlier cannot be
+spread across more elements than the row contains. Concretely, at
+`n=16, block_size=32` a lone spike of magnitude `a` comes out at `a/sqrt(16)`
+per entry rather than the `a/sqrt(32)` a genuine 32-element block would give,
+`sqrt(2)` times larger. This is reported as a limitation of that one grid
+corner, not silently absorbed: RHT's spreading power there is tied to `n`
+rather than to the nominal `block_size` the rest of the grid uses. Verified in
+`tests/test_transforms.py` ("short-row fallback" section): no crash,
+output shape preserved, orthogonality and inner-product preservation hold at
+the fallback size, round-trip via `invert_rht` is exact, the fallback spreads
+by `sqrt(n)` (not `sqrt(block_size)`) directly, and the genuine
+trailing-partial-block case (`n > block_size`, not a whole multiple) is
+pinned as still raising, unchanged, by a regression test.
 
 **Implementation note.** `hadamard_matrix` doubles a `+-1` matrix and divides by
 `sqrt(block_size)` once at the end, rather than multiplying in `1/sqrt(2)` at

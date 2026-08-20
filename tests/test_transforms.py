@@ -246,3 +246,101 @@ def test_output_is_float64_and_keeps_the_input_shape():
 
 def test_the_project_block_sizes_are_the_documented_four():
     assert RHT_BLOCK_SIZES == (8, 16, 32, 64)
+
+
+# --- short-row fallback (block_size > n) ---------------------------------------
+# Previously crashed outright (ValueError: "not a multiple of block_size") for
+# every (n, block_size) pair with n < block_size, including this project's own
+# (n=16, block_size=32, rht=True) grid cells -- untested by Step 1.6's original
+# suite, which never exercised block_size > n.
+
+
+@pytest.mark.parametrize("n,block_size", [(16, 32), (8, 16), (4, 64), (1, 8)])
+def test_a_row_shorter_than_block_size_does_not_crash(n, block_size):
+    x = np.random.default_rng(0).standard_normal(n)
+
+    out = apply_rht(x, block_size, np.random.default_rng(0))
+
+    assert out.dtype == np.float64
+    assert out.shape == x.shape
+
+
+@pytest.mark.parametrize("n,block_size", [(16, 32), (8, 16), (4, 64)])
+def test_short_row_fallback_preserves_the_inner_product(n, block_size):
+    rng = np.random.default_rng(123)
+    a = rng.standard_normal(n)
+    b = rng.standard_normal(n)
+
+    # Both operands must see the same sign draw, as in the normal case.
+    ta = apply_rht(a, block_size, np.random.default_rng(0))
+    tb = apply_rht(b, block_size, np.random.default_rng(0))
+
+    assert ta @ tb == pytest.approx(a @ b, rel=1e-12, abs=1e-12)
+
+
+@pytest.mark.parametrize("n,block_size", [(16, 32), (8, 16), (4, 64)])
+def test_short_row_fallback_is_orthogonal(n, block_size):
+    # H' @ H'.T == I at the fallback size, the same property asserted for the
+    # normal case by test_randomizing_the_signs_preserves_orthogonality.
+    h = _randomized_hadamard(n, seed=0)
+
+    assert np.allclose(h @ h.T, np.eye(n), atol=1e-12)
+
+
+@pytest.mark.parametrize("n,block_size", [(16, 32), (8, 16), (4, 64)])
+def test_short_row_fallback_round_trips(n, block_size):
+    rng = np.random.default_rng(4)
+    x = rng.standard_normal((3, n))
+
+    out = apply_rht(x, block_size, np.random.default_rng(17))
+    back = invert_rht(out, block_size, np.random.default_rng(17))
+
+    assert np.allclose(back, x, rtol=1e-12, atol=1e-12)
+
+
+def test_short_row_fallback_uses_the_row_length_not_the_nominal_block_size():
+    # A lone spike at n=16 with block_size=32 must spread over the 16
+    # elements actually present -- 100/sqrt(16) = 25 -- not over a
+    # nonexistent 32-element block (100/sqrt(32) ~= 17.68). This is the
+    # documented reduction in spread power, not just a shape accommodation.
+    x = np.zeros(16, dtype=np.float64)
+    x[3] = 100.0
+
+    out = apply_rht(x, 32, np.random.default_rng(0))
+
+    assert np.allclose(np.abs(out), 100.0 / np.sqrt(16), atol=1e-12)
+    assert not np.allclose(np.abs(out), 100.0 / np.sqrt(32), atol=1e-12)
+
+
+def test_short_row_fallback_matches_calling_with_block_size_equal_to_n():
+    # apply_rht(x, 32, rng) on a length-16 row must be identical to calling
+    # it with block_size=16 directly: the fallback is exactly "use n".
+    seed = 9
+    x = np.random.default_rng(1).standard_normal((5, 16))
+
+    via_fallback = apply_rht(x, 32, np.random.default_rng(seed))
+    via_explicit = apply_rht(x, 16, np.random.default_rng(seed))
+
+    assert np.array_equal(via_fallback, via_explicit)
+
+
+def test_short_row_fallback_requires_the_row_length_itself_be_a_power_of_two():
+    # block_size=32 > n=20 falls back to n=20, which is not a power of two --
+    # the fallback size gets the same validation as any other block size,
+    # not a free pass just because it came from a shape rather than an
+    # argument.
+    x = np.zeros(20, dtype=np.float64)
+
+    with pytest.raises(ValueError, match="power of two"):
+        apply_rht(x, 32, np.random.default_rng(0))
+
+
+def test_a_row_longer_than_block_size_and_not_a_multiple_still_raises():
+    # Regression guard: the short-row fallback must not swallow the genuine
+    # trailing-partial-block case (n > block_size, not a whole multiple),
+    # which has no unambiguous fallback and stays deliberately unchanged
+    # (see apply_rht's "Tail policy").
+    x = np.zeros(100, dtype=np.float64)
+
+    with pytest.raises(ValueError, match="multiple of block_size"):
+        apply_rht(x, 32, np.random.default_rng(0))

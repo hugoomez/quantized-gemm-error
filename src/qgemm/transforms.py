@@ -95,15 +95,52 @@ def _randomized_hadamard(block_size: int, rng: np.random.Generator) -> np.ndarra
     return hadamard_matrix(block_size) * random_signs(block_size, rng)
 
 
+def _effective_block_size(x: np.ndarray, block_size: int) -> int:
+    """The block size actually used for `x`'s last axis.
+
+    Equal to `block_size` whenever the row holds at least that many elements.
+    When the row is *shorter* than the nominal `block_size` -- so the whole
+    row is a single block with fewer than `block_size` elements in it --
+    this falls back to the row's own length, mirroring
+    `qgemm.blocks.quantize_blocked`'s short-block convention: a block that
+    doesn't have enough elements to fill the nominal size gets sized to what
+    it actually has (see that function's "Tail policy").
+
+    This is deliberately narrow: it does **not** extend to a row that is
+    *longer* than `block_size` but not a whole multiple of it (e.g. `n=100`,
+    `block_size=32`) -- that case still raises `ValueError` via
+    `_check_input`, unchanged. A genuine trailing partial block (some full
+    blocks followed by a short remainder) has no single `H'` it could be
+    multiplied by without picking an axis to apply that `H'` along a block
+    boundary that doesn't exist; only the "one block, and it's short" case
+    -- `block_size > n` -- has an unambiguous fallback (the whole row *is*
+    that one block), which is the only case this project's grid ever
+    produces (every `n` and `block_size` here is a power of two, and
+    `block_size` only ever exceeds `n` when `n` itself is the whole row).
+    """
+    return min(block_size, x.shape[-1])
+
+
 def _rht(x: np.ndarray, block_size: int, rng: np.random.Generator, inverse: bool) -> np.ndarray:
     _validate_block_size(block_size)
-    _check_input(x, block_size)
+    effective_block_size = _effective_block_size(x, block_size)
+    if effective_block_size != block_size:
+        # Row shorter than the nominal block_size: falls back to a single
+        # block spanning the whole row. That fallback size is not guaranteed
+        # to be a power of two just because the nominal block_size was (e.g.
+        # block_size=64, n=100 would fall back to 100, which is invalid) --
+        # validated explicitly here rather than assumed, even though every
+        # (n, block_size) pair this project actually sweeps is a power of
+        # two and this branch is therefore never expected to raise in
+        # practice.
+        _validate_block_size(effective_block_size)
+    _check_input(x, effective_block_size)
 
-    h = _randomized_hadamard(block_size, rng)
+    h = _randomized_hadamard(effective_block_size, rng)
     # Blocks are rows of the reshaped array, so `H' a` for a column `a` is
     # `a_row @ H'.T`. The inverse is the transpose, `H'.T y -> y_row @ H'`.
-    n_blocks = x.shape[-1] // block_size
-    blocks = x.reshape(*x.shape[:-1], n_blocks, block_size)
+    n_blocks = x.shape[-1] // effective_block_size
+    blocks = x.reshape(*x.shape[:-1], n_blocks, effective_block_size)
     return (blocks @ (h if inverse else h.T)).reshape(x.shape)
 
 
@@ -165,21 +202,44 @@ def apply_rht(x: np.ndarray, block_size: int, rng: np.random.Generator) -> np.nd
 
     Tail policy
     -----------
-    Unlike `quantize_blocked`, which keeps a trailing partial block short, this
-    requires the last axis to be an exact multiple of `block_size`. A partial
-    block has no `H'` to be multiplied by, and padding it would change the
-    array's shape and break invertibility; a mismatch raises `ValueError`.
+    Unlike `quantize_blocked`, which keeps a trailing partial block short, a
+    row **longer** than `block_size` must be an exact multiple of it: a
+    genuine trailing partial block (full blocks followed by a short
+    remainder) has no single `H'` it could be multiplied by, and padding it
+    would change the array's shape and break invertibility, so that mismatch
+    still raises `ValueError`.
+
+    A row **shorter** than `block_size` is different and is handled: the
+    whole row is unambiguously one block, so `apply_rht` falls back to
+    transforming it at its own length instead of raising, mirroring
+    `quantize_blocked`'s short-block convention (`_effective_block_size`).
+    **This has a real, physical consequence for the RHT's spreading power in
+    that one corner, not just a shape accommodation**: the transform's spread
+    factor is `sqrt(effective_block_size)`, so when the row is shorter than
+    the nominal `block_size`, the achieved spread is `sqrt(n)` rather than
+    the `sqrt(block_size)` a full-length block would give -- strictly less,
+    since `n < block_size` there. This is a physically necessary limitation
+    (an outlier cannot be spread across more elements than the row contains),
+    not a silent scope change: a lone spike of magnitude `a` in a `block_size
+    = 32` configuration ordinarily comes out at `a / sqrt(32)` per entry, but
+    at `n = 16` it comes out at `a / sqrt(16)` instead, `sqrt(2)` times
+    larger. Only this project's `(n=16, block_size=32, rht=True)` grid cells
+    hit this fallback (SPEC.md, "Sweep grid (Step 3.1)"); every other cell
+    has `n >= block_size` and is unaffected.
 
     Parameters
     ----------
     x : np.ndarray
         float64 array. Leading axes are independent rows.
     block_size : int
-        A power of two, and a divisor of `x.shape[-1]`. The project sweeps
-        `RHT_BLOCK_SIZES`.
+        A power of two. Normally a divisor of `x.shape[-1]`; if
+        `x.shape[-1] < block_size`, the whole row is used as a single block
+        instead (see "Tail policy" above), and `x.shape[-1]` itself must then
+        be a power of two. The project sweeps `RHT_BLOCK_SIZES`.
     rng : np.random.Generator
         Explicit generator for the sign draw; consumes one `integers` call of
-        `block_size` values.
+        `effective_block_size` values (`block_size`, or `x.shape[-1]` when
+        the row is shorter -- see "Tail policy").
 
     Returns
     -------
@@ -191,7 +251,9 @@ def apply_rht(x: np.ndarray, block_size: int, rng: np.random.Generator) -> np.nd
     TypeError
         If `x` is not float64.
     ValueError
-        If `block_size` is not a power of two, or does not divide `x.shape[-1]`.
+        If `block_size` is not a power of two; if `x.shape[-1] > block_size`
+        and does not divide evenly by it; or if `x.shape[-1] < block_size`
+        and `x.shape[-1]` is itself not a power of two.
 
     See Also
     --------

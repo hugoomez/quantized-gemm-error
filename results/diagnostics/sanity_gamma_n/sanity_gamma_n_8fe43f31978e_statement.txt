@@ -1,0 +1,3 @@
+RTNE: empirical log-log slope of median(BE) vs n is -0.0198 +/- 0.0099 (95% CI [-0.0299, -0.0102]), inconsistent with sqrt(n) (slope 0.5).
+SR: empirical log-log slope of median(BE) vs n is -0.0122 +/- 0.0095 (95% CI [-0.0225, -0.0035]), inconsistent with sqrt(n) (slope 0.5).
+gamma_n bound undefined (n * u_fp16 >= 1) at n = [4096, 16384]; zero-violation check performed only at the remaining n values, where it passed with zero exceptions across all trials.

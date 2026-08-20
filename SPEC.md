@@ -839,3 +839,84 @@ by these data:
 To reproduce: `python scripts/check_metric_stability.py` (about three minutes;
 `--trials`, `--out-rows` and `--seed` are the only knobs, and changing any of
 them changes the config digest and therefore the output filenames).
+
+## Gamma_n sanity check -- MEASURED, pending human review
+
+**Status: a measurement, not a decision.** This is a control experiment,
+deliberately outside the quantized formats this project studies -- no
+MXFP4/NVFP4/E2M1/block scaling anywhere in it. It exists to validate the
+measurement pipeline itself (trial generation, `qgemm.metrics.backward_error`,
+log-log slope fitting with a bootstrap CI) on standard IEEE fp16 rounding of
+inner products, before that pipeline is trusted on anything exotic. Produced
+by `scripts/sanity_gamma_n.py` (one run, no manual steps); data, config and
+figure under `results/diagnostics/sanity_gamma_n/sanity_gamma_n_8fe43f31978e*`,
+the digest being the sha256 of the run config saved alongside. Per the task
+that produced it, this section stops at reporting the measurement -- whether
+the result supports moving on to Phase 2 or revisiting Phase 1 is a human
+call, made elsewhere, not here.
+
+### What was measured
+
+`n in {16, 64, 256, 1024, 4096, 16384}`, Gaussian(0,1) operands, 2000
+independent trials per `n`. Per trial: an exact float64 inner product and an
+fp16-rounded inner product of the same two vectors, computed by sequential
+summation with **every** intermediate step -- each element-wise product and
+each partial sum -- rounded to fp16, once under round-to-nearest-even (RTNE,
+via `numpy.float16` casting, exact and needing no further validation) and
+once under stochastic rounding (SR, via a small local `round_stochastic_fp16`
+following this project's existing SR convention: round to the nearest fp16
+neighbor with probability proportional to distance, unit-tested for
+determinism on exact grid points, correct probability at a known quarter-step,
+and unbiasedness). `qgemm.bounds.gamma_n` and `qgemm.metrics.backward_error`
+are used unmodified -- this check is specifically what validates them, so
+neither is reimplemented inline. fp16's unit roundoff `u = 2^-11` is derived
+from `numpy.finfo(np.float16)` (`eps / 2`) and cross-checked against the
+10-bit mantissa, not hardcoded.
+
+### Zero-violation check against the deterministic worst-case bound
+
+**Passed with zero exceptions, everywhere it is defined.** At every trial,
+mode, and `n` where `gamma_n(n, u)` is defined (`n * u < 1`, i.e. `n <= 1024`
+at fp16 precision), the observed `BE` never exceeded it -- across
+2000 trials x 2 modes x 4 such `n` values, zero violations.
+
+**At `n = 4096` and `n = 16384`, `n * u_fp16 >= 1` (2.0 and 8.0
+respectively), so `gamma_n`'s closed form `n*u/(1-n*u)` is out of its domain**
+(`qgemm.bounds.gamma_n` raises `ValueError` there by design -- see its
+docstring). This is a real limitation of the classical bound at fp16
+precision, not a gap in this check: fp16's coarse unit roundoff means the
+formula's own validity condition fails well inside the range of `n` this
+project's contraction dimensions span, so no zero-violation comparison could
+be performed at those two `n`. Reported plainly rather than silently
+skipped -- see `scripts/sanity_gamma_n.py`'s `run_mode`.
+
+### The log-log slope, and why it does not need re-litigating here
+
+```
+RTNE: empirical log-log slope of median(BE) vs n is -0.0198 +/- 0.0099 (95% CI [-0.0299, -0.0102]), inconsistent with sqrt(n) (slope 0.5).
+SR: empirical log-log slope of median(BE) vs n is -0.0122 +/- 0.0095 (95% CI [-0.0225, -0.0035]), inconsistent with sqrt(n) (slope 0.5).
+gamma_n bound undefined (n * u_fp16 >= 1) at n = [4096, 16384]; zero-violation check performed only at the remaining n values, where it passed with zero exceptions across all trials.
+```
+
+Stated plainly, per the task this check was run under: **median(BE) is
+essentially flat across four orders of magnitude of `n`, for both RTNE and
+SR** -- slightly *negative* slopes, both bootstrap CIs excluding both 0.5
+(the `sqrt(n)` probabilistic regime) and 1.0 (the `gamma_n` worst-case
+regime). `p99(BE)` (plotted alongside, not fit) shows the same flat pattern.
+The 95% CIs are narrow and both exclude 0.5 outright, so this is not read as
+a power-limited null result. The full table (`median_be`, `p99_be`,
+`max_be`, `gamma_n_bound`, `violations` per mode x `n`) is in
+`sanity_gamma_n_8fe43f31978e_summary.parquet`; the figure is
+`sanity_gamma_n_8fe43f31978e_slope.png`.
+
+This was checked for an implementation bug before being written down here:
+`fp16_dot_rtne`'s vectorized output was cross-verified, off the batched code
+path, against a from-scratch scalar Python loop at `n = 16384` (bit-for-bit
+match across sampled trials), and the same trials' `backward_error` output
+was independently recomputed from the raw numerator (`|exact - fp16|`) and
+denominator (`sum|a_i b_i|`) by hand, matching the pipeline's own numbers.
+The flatness is not an artifact of this measurement.
+
+No interpretation of what this means for Phase 2 vs. Phase 1 is offered
+here, per the instructions this check was run under -- this section reports
+the measurement and stops.

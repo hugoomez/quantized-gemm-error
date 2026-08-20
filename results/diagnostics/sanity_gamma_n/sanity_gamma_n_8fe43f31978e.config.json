@@ -1,0 +1,21 @@
+{
+  "ci_percentiles": [
+    2.5,
+    97.5
+  ],
+  "distribution": "gaussian",
+  "n_bootstrap": 10000,
+  "n_values": [
+    16,
+    64,
+    256,
+    1024,
+    4096,
+    16384
+  ],
+  "script": "sanity_gamma_n.py",
+  "seed": 0,
+  "trials": 2000,
+  "u_fp16": 0.00048828125,
+  "version": 1
+}

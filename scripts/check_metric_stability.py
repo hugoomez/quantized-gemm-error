@@ -88,6 +88,7 @@ import pandas as pd  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
 from qgemm.gemm import GemmConfig, qgemm  # noqa: E402
+from qgemm.metrics import backward_error  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = REPO_ROOT / "results" / "diagnostics" / "metric_stability"
@@ -185,14 +186,14 @@ def run_cell(
     rng = np.random.default_rng([base_seed, int(nu * 100), n])
     num = np.empty((trials, out_rows * out_rows), dtype=np.float64)
     den = np.empty_like(num)
+    be = np.empty_like(num)
     for t in tqdm(range(trials), desc=f"nu={nu:g} n={n}", leave=False):
         a = sample_t((out_rows, n), nu, rng)
         b = sample_t((n, out_rows), nu, rng)
         approx = qgemm(a, b, GemmConfig(seed=t))  # MXFP4 preset; see module docstring
         num[t] = np.abs(approx - a @ b).ravel()
         den[t] = (np.abs(a) @ np.abs(b)).ravel()
-    with np.errstate(divide="ignore", invalid="ignore"):
-        be = num / den
+        be[t] = backward_error(a, b, approx).ravel()
     return num, den, be
 
 

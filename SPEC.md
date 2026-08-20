@@ -1521,7 +1521,95 @@ error's height under heavy tails than under near-Gaussian data.
   0.02 reporting threshold are diagnostic choices, not frozen commitments; none
   of them is a dated amendment under section 8.
 
-## u_eff measurement -- bound-definition groundwork, PROPOSED, pending review
+## u_eff measurement -- bound-definition groundwork, RESOLVED
+
+## Theoretical bound definition (🧠1) — RESOLVED
+
+**Problem.** Classical bounds (γ_n, √n·u) assume a fixed unit roundoff
+applied uniformly across n accumulation steps, with their n-dependence
+arising specifically from repeated rounding during summation. Neither
+assumption holds here: the unit roundoff varies per block depending on
+outlier structure, and this project's primary experimental route
+(Step 1.7, accum="exact") accumulates in exact fp64 — there is no
+repeated rounding during summation, so the mechanism that produces
+γ_n/√n·u's n-dependence is not physically present in this pipeline.
+
+**Derivation of the correct scaling.** With exact accumulation, the only
+error source is one-time quantization of each input element before
+summation. The error at output entry (i,j) is approximately a sum of n
+terms of alternating/mixed sign (each element's quantization error
+contributes with essentially random sign), so by partial cancellation
+this sum scales like √n, not n — the same mechanism that resolved the
+Step 2.1 flat-slope investigation (Check 5: partial sums scale as √k
+under mean-zero cancellation). The BE denominator, Σ|A_ik||B_kj|, is a
+sum of n strictly positive terms and grows approximately linearly in n
+for well-behaved inputs. Combining: BE ~ (√n · u_eff) / n = u_eff/√n —
+DECAYING in n, not growing.
+
+**Bound tested:**
+
+    cota(n, format, block, ν) = c · u_eff(format, block, ν) / √n
+
+where:
+- u_eff(format, block, ν) := median of per-element relative quantization
+  error, measured empirically per configuration (measure_u_eff, Step
+  🧠1 groundwork), excluding elements below the format's flush-to-zero
+  threshold (a dynamic-range floor, not a precision measurement — see
+  documented limitation below).
+- c is fixed a priori at c=1 for confirmatory analysis, per
+  PREREGISTRATION §3.2's anti-circularity constraint (a bound whose
+  constant is fitted to the same data it is tested against cannot be
+  falsified by that data). Under the derivation above, c=1 is retained
+  as the reference leading-order constant for the u_eff/√n scaling
+  relationship; because the derivation is an order-of-magnitude
+  argument (CLT/LLN reasoning) rather than a proven tight inequality,
+  c=1 is not guaranteed to be well-calibrated, and a poorly-calibrated
+  c is itself a reportable finding, not a reason to re-fit. Any ĉ
+  fitted from data (Step 4.1) remains descriptive/exploratory only
+  (§3.2, §5(b)) and is never substituted into the confirmatory ratio.
+
+This form is directly consistent with measurement: at ν=30, empirical
+median(BE) decays with slope ≈ −0.4978 (block 16) / −0.4966 (block 32),
+closely matching the derived −0.5 exponent (n-scaling probe, Step 2.3
+groundwork).
+
+**Where the derivation breaks, and why this is expected, not a defect.**
+At ν=1, empirical decay is much slower (slope ≈ −0.14) than the
+derived √n rate predicts. The derivation above relies on the numerator
+behaving like a mean-zero random walk (CLT) and the denominator behaving
+like a law-of-large-numbers sum — both require finite variance/mean.
+Neither holds at ν=1 (Cauchy): both numerator and denominator are
+plausibly dominated by the same extreme elements rather than averaging
+independently, consistent with the Step 1.8 metric-stability finding
+that BE stays well-behaved specifically because its numerator and
+denominator are commonly dominated by the same outliers. This is
+recorded as an expected breakdown of the derivation's assumptions at
+heavy tails, not an error in the bound's form.
+
+**Break criterion (🧠7, unchanged in mechanics):** the bound is
+considered broken at (format, ν, n) if the lower bound of the 95%
+bootstrap CI of the median of empirical_BE / cota(n) exceeds 1.0 — i.e.
+error decays reliably slower than the u_eff/√n cancellation rate
+predicts, not that it exceeds a growing worst-case ceiling.
+
+**Documented limitation carried over from the u_eff groundwork.**
+u_eff under-predicts larger blocks' relative disadvantage (median BE
+level ratio 32/16 explained by u_eff's own ratio: ~83% at ν=30, ~48% at
+ν=1). Leading candidate mechanism, confirmed directionally but not
+quantitatively: elements sharing a block share a scale, so their errors
+are correlated rather than independent, violating the independence
+assumption both this derivation and the classical bounds rely on — a
+correlation strongly consistent with the survival-fraction gap between
+block sizes growing 16.9× from Gaussian to ν=1 (Spearman 1.0 against the
+u_eff excess across the full ν grid). Not resolved further here;
+reported as a limitation for explicit discussion in Section 5.
+
+**Why this doesn't block Phase 3.** The u_eff residual and the ν=1
+decay-rate breakdown are both consistently signed, grow smoothly with
+tail weight, and were consistent with a non-independence concern already
+raised in the preregistration (§3.2, R8) regarding bootstrap resampling
+validity — not late-discovered defects.
+
 
 **Status: a measurement, not a decision.** This section supplies one of the
 quantities a theoretical error bound for block-scaled formats would need, and

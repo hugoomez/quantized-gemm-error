@@ -341,7 +341,59 @@ version and any later state is diffable against it.
 
 | Date | Section | Change | Justification | Pre- or post-data |
 |---|---|---|---|---|
-| — | — | None yet | — | — |
+| 2026-08-20 | §3, §3.1 | 🧠1 resolved: the provisional `bound(n) = c · √n · u_eff` is superseded by `cota(n, format, block, ν) = c · u_eff(format, block, ν) / √n` — a **decaying** form, not a growing one | The primary route accumulates in exact fp64, so the repeated-rounding mechanism that gives γ_n and √n·u their n-dependence is not physically present. The surviving mechanism is partial cancellation of one-time input-quantization errors, which makes `BE` decay as n^(-1/2). Measured: slopes −0.4978 (block 16) / −0.4966 (block 32) at ν = 30. | **Pre-data** |
+
+### 8.1 — 2026-08-20: 🧠1 resolved, bound functional form only
+
+**What changed.** §3.1 recorded `bound(n) = c · √n · u_eff` as an explicit
+placeholder pending 🧠1, and committed (§3.1 item 1) that a different
+resolution would be filed here as a dated amendment before the confirmatory
+analysis is run. 🧠1 is now resolved, and the resolved form is
+
+    cota(n, format, block, ν) = c · u_eff(format, block, ν) / √n
+
+The full derivation, the measurements it is consistent with, the point at which
+it breaks down (ν = 1), and its documented limitations are in SPEC.md,
+"Theoretical bound definition (🧠1) — RESOLVED".
+
+**This supersedes any earlier informal reference to a √n-growing form**,
+including §3.1's own provisional `c · √n · u_eff` and §3.2's parenthetical
+framing of the comparator as "the probabilistic √n·u bound". Per the
+append-only rule at the head of §8, §§1–7 are **not** edited in place: the
+provisional definition stays where it is and is superseded by this entry, not
+overwritten by it. Both the provisional-bound and resolved-bound results are
+still to be reported side by side, per §3.1 item 1.
+
+**Timing — pre-data, verified.** This resolution was decided **before** the
+Phase 3 sweep was run and **before** any `c` was fitted. Verified against the
+repository at the time of writing: `results/` contains only `diagnostics/`
+subdirectories (`metric_stability`, `n_scaling`, `sanity_gamma_n`,
+`sanity_reproduce_2408`, `u_eff`); no `sweep_*.parquet` exists anywhere, and no
+fitted constant exists in `src/` or `scripts/`. The evidence the resolution
+rests on is diagnostic and exploratory by construction, and none of it is
+confirmatory-sweep data.
+
+**c is unaffected by this amendment.** §3.2's `c = 1` a-priori fixing and its
+anti-circularity constraint stand exactly as written: a bound whose constant is
+fitted to the same data it is tested against cannot be falsified by that data.
+Only the bound's **functional form** changes here — `u_eff/√n` replacing the
+previously-informal `√n·u` reference — not the constant-fitting rule. Any
+ĉ fitted from data remains descriptive and exploratory only (§3.2, §5(b)) and
+is never substituted into the confirmatory ratio. Note that §3.2 tags `c = 1`
+as ⚑ INFERRED from the superseded √n·u framing; it is retained here as the
+reference leading-order constant for the new scaling relationship, and because
+the derivation is an order-of-magnitude (CLT/LLN) argument rather than a proven
+tight inequality, a poorly-calibrated `c = 1` is a reportable finding rather
+than grounds to re-fit.
+
+**R6 remains OPEN and is not resolved by this amendment.** R6 — that a
+ν-indexed `u_eff(format, block, ν)` partially defines away the effect H1 is
+looking for, since both sides of the ratio then move with ν — is marked
+**[major, NOT fixed — author's call]** in §9 and stays that way. The resolved
+bound retains the ν-indexed `u_eff`, so R6 applies to it exactly as it applied
+to the provisional form. This amendment closes the **functional-form** question
+(🧠1) and nothing else; it makes no claim about R6, and §3.1 item 3's required
+wording about what H1 does and does not test continues to apply unchanged.
 
 ## 9. Adversarial Review Notes (2026-08-19)
 

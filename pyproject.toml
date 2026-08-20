@@ -23,13 +23,14 @@ dependencies = [
     "pyarrow>=14.0",
     "pytest>=7.4",
     "tqdm>=4.66",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
 # Lint tooling isn't part of the numerical/dependency list the project
 # cares about reproducing exactly, so it's kept separate from the core
 # pinned set in requirements.lock.
-dev = ["ruff>=0.5", "pyyaml>=6.0"]
+dev = ["ruff>=0.5"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/qgemm"]

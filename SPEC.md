@@ -1611,11 +1611,9 @@ raised in the preregistration (§3.2, R8) regarding bootstrap resampling
 validity — not late-discovered defects.
 
 
-**Status: a measurement, not a decision.** This section supplies one of the
-quantities a theoretical error bound for block-scaled formats would need, and
-runs one causal check against a result already on the record. **It does not
-define such a bound, and nothing below should be read as defining one.** That
-decision needs human review.
+**Status: the definition above is resolved** (see "Theoretical bound
+definition (🧠1) — RESOLVED"); what follows is the measurement and
+diagnostic evidence that supports it.
 
 What landed in code is a measurement function, not a bound:
 `qgemm.bounds.measure_u_eff`, with `u_eff_samples` and

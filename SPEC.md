@@ -1867,14 +1867,15 @@ not run.
 
 ## Sweep grid (Step 3.1) -- FROZEN, not yet run
 
-**Status: the grid is frozen; nothing has been executed.** This section
-documents `configs/sweep_main.yaml` and the dry-run timing estimate for it.
-Per PREREGISTRATION.md sec 6, `configs/default.json` is a leftover placeholder
-and is not this config; `sweep_main.yaml`'s sha256 is what a future
-confirmatory run's `sweep_{sha256(...)[:12]}.parquet` filename will encode.
-**Running the sweep is a later step and is explicitly out of scope here.**
+**Status: the grid is frozen (with one cut applied, below); nothing has been
+executed.** This section documents `configs/sweep_main.yaml` and the dry-run
+timing estimate for it. Per PREREGISTRATION.md sec 6, `configs/default.json`
+is a leftover placeholder and is not this config; `sweep_main.yaml`'s sha256
+is what a future confirmatory run's `sweep_{sha256(...)[:12]}.parquet`
+filename will encode. **Running the sweep is a later step and is explicitly
+out of scope here.**
 
-### The frozen grid
+### The frozen grid (post-cut)
 
 Six factors, factorial, exactly as listed (no additions, no removals):
 
@@ -1882,17 +1883,17 @@ Six factors, factorial, exactly as listed (no additions, no removals):
 |---|---|
 | `nu` (t-Student df) | 1, 2, 3, 5, 8, 15, 30, gaussian |
 | `n` (contraction dimension) | 16, 64, 256, 1024, 4096 |
-| `block_size` | 8, 16, 32, 64 |
+| `block_size` | 16, 32 (cut from 8, 16, 32, 64 -- see below) |
 | `scale_format` | e8m0, e4m3 |
 | `round_mode` | rtne, sr |
 | `rht` | false, true (per-block only; a global RHT stays out of scope per `transforms.py`) |
 
-`8 x 5 x 4 x 2 x 2 x 2 = 1280` cells. `accum` is fixed at `"exact"`
-(`accum="bf16"` is a separate ablation, out of scope) and `element_format` is
-fixed at `"e2m1"` (the only element format `qgemm.blocks` supports). Matrix
-shape is `(m=64, n) @ (n, k=64)` for every cell -- reused unchanged from
-`scripts/probe_n_scaling.py` and `scripts/measure_u_eff.py`, not a new
-convention.
+`8 x 5 x 2 x 2 x 2 x 2 = 640` cells (was 1280 before the cut). `accum` is
+fixed at `"exact"` (`accum="bf16"` is a separate ablation, out of scope) and
+`element_format` is fixed at `"e2m1"` (the only element format
+`qgemm.blocks` supports). Matrix shape is `(m=64, n) @ (n, k=64)` for every
+cell -- reused unchanged from `scripts/probe_n_scaling.py` and
+`scripts/measure_u_eff.py`, not a new convention.
 
 **`use_global_scale` is derived, not swept.** It is fully determined by
 `scale_format`, matching the MXFP4/NVFP4 presets in `blocks.py` exactly:
@@ -1901,7 +1902,77 @@ convention.
 global scale exists"). Encoded as a lookup in `sweep_main.yaml`
 (`use_global_scale_by_scale_format`) and read that way by
 `scripts/run_sweep.py`'s `iter_main_cells`, which is what keeps the grid at
-1280 cells rather than 2560.
+640 cells rather than 1280.
+
+### The block_size cut (2026-08-20)
+
+**block_size reduced from `[8, 16, 32, 64]` to `[16, 32]`, dropping the grid
+from 1280 to 640 cells.** Applied in response to the first dry-run's gate
+check: serial timing reliably exceeded the 8h budget by 7x-13x across five
+independent isolated runs (see the superseded numbers this section used to
+carry, now replaced below).
+
+**What survives, and why.** 16 and 32 are NVFP4's and MXFP4's own block
+sizes; held against the two `scale_format` values they form the full 2x2
+this project's own P1 comparison needs (PREREGISTRATION.md: "P1 -- ν*(block
+16) vs ν*(block 32), scale format held constant [block-size causal effect]",
+the *sole* confirmatory test of H1 per sec 4.1). That 2x2 is the causal core
+Step 1.5 built (`qgemm.blocks.quantize_blocked`, one parametrized quantizer
+of which MXFP4/NVFP4 are presets) and this project treats it as
+non-negotiable.
+
+**What was dropped, and why that's the right cut, not an arbitrary one.**
+8 and 64 are, in this project's own documented words (SPEC.md, "Why the
+controls exist"): "the endpoints that show whether the block-size effect is
+monotone over the range" -- explicitly an extension for checking monotonicity
+across the causal core, not part of the core comparison itself. Dropping them
+first, before touching `n`, `nu`, `round_mode`, `rht`, or the trial budget,
+removes exactly the two values whose absence costs the study the least: P1,
+P2 and P3 (PREREGISTRATION.md sec 4) are all defined in terms of `block_size
+in {16, 32}` already, and no primary or design-validity comparison reads
+block 8 or block 64.
+
+**A citation note, stated plainly rather than papered over.** The task that
+requested this cut described it as applying "this project's own pre-declared
+cut-order (Appendix A of the roadmap, item 4)". A full search of this
+repository -- every tracked file and the complete git history -- found no
+roadmap document, no "Appendix A", and no pre-declared cut-order list
+anywhere. (It also found that a prior session's own commit message coined the
+phrase "cut-line policy" without grounding it in any such document, which may
+be the source of the apparent citation.) The cut applied above stands on its
+own documented rationale -- SPEC.md's own "Why the controls exist" language,
+written before any of this dry-run work -- not on an external document this
+repository does not contain. If a roadmap/Appendix A exists outside this
+repository, it should be added so future cuts can cite it for real.
+
+### A pre-existing grid defect, found while measuring the cut (not introduced by it)
+
+**32 of the 640 cells are currently not executable.** `qgemm.transforms.
+apply_rht` has no partial-block form (SPEC.md: "A last axis that is not a
+whole number of blocks raises `ValueError`"), so any cell with `rht=true`
+whose `n` is not a whole multiple of `block_size` raises at the `qgemm()`
+call. In the post-cut grid this is exactly `n=16, block_size=32, rht=true`
+(16 is not a multiple of 32): `2 scale_format x 2 round_mode x 8 nu = 32`
+cells, `80,000` trials. **This defect predates today's cut** -- the original
+1280-cell grid had the same problem at `block_size in {32, 64}`, 64 broken
+cells total -- and was not caught until `scripts/run_sweep.py --dry-run`'s
+real-multiprocessing measurement (below) actually called `qgemm()` on a
+sampled cell and it raised. The single-process cost-model timing added in
+the first dry-run never exercised this combination (its overhead-factor
+sample points used `n=256` and `n=4096`, never `n=16`), which is how it went
+unnoticed.
+
+`scripts/run_sweep.py` now detects this (`cell_is_executable`), reports the
+count and excludes affected cells from its real-multiprocessing sample so the
+measurement doesn't crash on them -- but **does not decide how to fix the
+grid**. Their trial time is still included in the cost-model totals below
+(that model is arithmetic, not an actual `qgemm()` call, so it does not
+crash), which is a reporting choice worth flagging: those 80,000 trials'
+worth of estimated compute could not actually be produced as the grid is
+currently specified. Candidate fixes -- capping `rht_block_size` below
+`block_size` when `n < block_size`, dropping `n=16` for the affected arm, or
+excluding the cell from the grid outright -- are none of them applied here;
+this is a human decision, same as the cut-size gate below.
 
 ### Adaptive trial budget
 
@@ -1919,90 +1990,133 @@ Not uniform across `nu`:
   budget (the same default `scripts/probe_n_scaling.py` and
   `scripts/check_metric_stability.py` already use as a "cheap probe" count).
 
-Main grid: `3 heavy-tail nu x 160 cells/nu x 5000 = 2,400,000` trials plus
-`5 light-tail nu x 160 cells/nu x 1000 = 800,000` trials = **3,200,000 trials**.
+Main grid: `3 heavy-tail nu x 80 cells/nu x 5000 = 1,200,000` trials plus
+`5 light-tail nu x 80 cells/nu x 1000 = 400,000` trials = **1,600,000 trials**
+(was 3,200,000 before the cut -- exactly half, as expected from halving
+`block_size`'s cardinality with every other factor unchanged).
 
-### Reference configs (outside the 1280-cell grid)
+### Reference configs (outside the 640-cell grid)
 
 FP8-E4M3 per-tensor, FP8-E5M2 per-tensor, INT8 per-tensor
 (`qgemm.formats.int8_quantize`) -- context/comparison baselines, not part of
 the factorial (no `block_size`/`scale_format`/`use_global_scale`/`rht`
-dimension; these formats are not block-scaled). Swept across the same `nu`
-grid and the same adaptive trial budget, but at a representative subset of
-`n = [16, 256, 4096]` rather than all five -- reusing
-`scripts/check_metric_stability.py`'s own `(nu, n)` grid unchanged (its
-`GRID_N` is exactly `{16, 256, 4096}`) rather than picking a new one: 16 is
-the highest-risk corner for a per-tensor denominator, 4096 is the main grid's
-ceiling, 256 a middle anchor. `3 formats x 8 nu x 3 n = 72 cells`, `180,000`
-trials total (`60,000` heavy-tail + `120,000` light-tail).
+dimension; these formats are not block-scaled, so they are untouched by the
+block_size cut). Swept across the same `nu` grid and the same adaptive trial
+budget, but at a representative subset of `n = [16, 256, 4096]` rather than
+all five -- reusing `scripts/check_metric_stability.py`'s own `(nu, n)` grid
+unchanged (its `GRID_N` is exactly `{16, 256, 4096}`) rather than picking a
+new one: 16 is the highest-risk corner for a per-tensor denominator, 4096 is
+the main grid's ceiling, 256 a middle anchor. `3 formats x 8 nu x 3 n = 72
+cells`, `180,000` trials total (`60,000` heavy-tail + `120,000` light-tail) --
+unchanged by the cut.
 
-Grid total: **1352 cells, 3,380,000 trials.**
+Grid total: **712 cells, 1,780,000 trials** (was 1352 cells / 3,380,000
+trials before the cut).
 
-### Dry-run timing estimate
+### Dry-run timing estimate (post-cut, real multiprocessing measured)
 
-Produced by `python scripts/run_sweep.py --dry-run` (adds `--dry-run` to
-`scripts/run_sweep.py`; the unrelated `configs/default.json` path is
-untouched). Measures real `qgemm` + `backward_error` calls at the base
-`n x block_size` grid (20 points, `rht=False`, `round_mode="rtne"`,
-`scale_format="e8m0"`), plus `rht`/`round_mode="sr"`/`e4m3+global` overhead
-factors averaged over two representative `(n, block_size)` points, plus the
-three reference-format quantizers at their `n` subset -- then extrapolates
-over the full grid's trial counts. No full sweep cell is actually run; this
-only times single representative calls.
+Produced by `python scripts/run_sweep.py --dry-run`. Two independent
+measurements feed the report, and they are not the same kind of number:
 
-**Run-to-run variance, disclosed rather than hidden behind one number.** This
-machine is a shared development environment, not a controlled benchmark rig,
-and single-call wall-clock timing at millisecond scale is noisy here: five
-independent invocations (`--dry-run-reps` 20 and 50, run in isolation, not
-concurrently with anything else) gave:
+1. **Single-process cost model** (unchanged methodology from the pre-cut
+   dry-run): real `qgemm` + `backward_error` calls at the base `n x
+   block_size` grid (now 10 points, `rht=False`, `round_mode="rtne"`,
+   `scale_format="e8m0"`), plus `rht`/`round_mode="sr"`/`e4m3+global`
+   overhead factors from two representative points (`(256, 16)` and
+   `(4096, 32)` -- `(4096, 64)` is no longer valid post-cut). This gives the
+   **serial** estimate and, divided by core count, an **ideal-scaling**
+   parallel estimate -- the same naive assumption the previous dry-run used,
+   kept only as a reference figure now.
+2. **Real `multiprocessing.Pool` measurement** (new this step, per the task's
+   explicit requirement not to extrapolate parallel time from an ideal-
+   scaling assumption): 32 real cells, evenly spaced across the grid's
+   iteration order for coverage of every factor including `nu`, each run as
+   its own OS process (`multiprocessing.Pool(processes=n_cores)`, one process
+   per cell, each with its own RNG state seeded from `SeedSequence([cell_index,
+   trial])` -- never shared, per the repo's explicit-Generator convention).
+   Every sampled cell runs a fixed 150 trials (not its real 1000/5000-trial
+   budget, to bound the measurement's own runtime) so the wall-clock time is
+   **actually measured**, not modeled. The ratio of this measured time to
+   what the single-process cost model predicted for the identical sample
+   workload is the **measured parallel efficiency**; applying it as a
+   correction to the ideal-scaling full-grid estimate gives the **headline
+   MEASURED parallel estimate**. A **cross-check** extrapolates directly from
+   the sample's own measured trials/second instead, ignoring the cost model
+   entirely, and is reported alongside.
+
+**What this measurement does not capture.** Every sampled cell runs the same
+150 trials regardless of its real budget, so **load imbalance from the real
+1000-vs-5000-trial split across cells is not measured** -- a real
+multiprocessing run would have some workers finish their light-tail cells and
+sit idle (or start a new cell) while others are still deep into a 5000-trial
+heavy-tail cell, an effect this design cannot see. The efficiency figure
+below is therefore likely still a *mild overestimate* of real production
+throughput, i.e. real execution is probably somewhat slower than this
+estimate says.
+
+**Run-to-run variance, disclosed rather than hidden behind one number.** Same
+finding as the pre-cut dry-run: this is a shared development machine, not a
+controlled benchmark rig, and both the single-process cost model *and* the
+real Pool measurement are noisy here. Five independent invocations, run in
+isolation with production defaults (`--dry-run-reps 20`,
+`--dry-run-parallel-sample-cells 32`, `--dry-run-parallel-sample-trials 150`):
 
 ```
-run   reps   serial estimate   parallel estimate (12 cores)
-1       20      83.9 h              7.00 h
-2       20      54.5 h              4.54 h
-3       50      57.2 h              4.77 h
-4       50      79.6 h              6.63 h
-5       50     102.5 h              8.54 h
+run   serial (cost model)   parallel, MEASURED (headline)   parallel, cross-check
+1           11.65 h                  2.70 h                       3.20 h
+2           83.16 h                  5.82 h                       8.49 h  <- cross-check EXCEEDS
+3            7.01 h                  5.34 h                       5.97 h
+4           26.85 h                  4.41 h                       5.78 h
+5            6.92 h                  8.12 h  <- EXCEEDS            9.09 h  <- EXCEEDS
 
-serial:   range [54.5, 102.5] h, median 79.6 h -- 7x-13x the 8h budget every time
-parallel: range [4.54, 8.54] h, median 6.63 h -- straddles the 8h gate (4/5 within, 1/5 over)
+serial:            range [6.92, 83.16] h, median 11.65 h -- 2 of 5 runs now clear 8h (never did pre-cut)
+measured parallel:  range [2.70, 8.12] h,  median 5.34 h -- straddles the gate (1 of 5 exceeds)
+cross-check:        range [3.20, 9.09] h,  median 5.97 h -- straddles the gate (2 of 5 exceed)
 ```
 
-One representative run (run 4, 50 reps) in full:
+One representative run (run 5) in full:
 
 ```
-Main factorial grid: 1280 cells, 3,200,000 trials total.
+Main factorial grid: 640 cells (32 not executable, see above), 1,600,000 trials total.
 Reference configs:   72 cells, 180,000 trials total.
-Grid total:          1352 cells, 3,380,000 trials.
+Grid total:          712 cells, 1,780,000 trials.
 
-Overhead factors (measured, multiplicative on the base n/block_size cost):
-  rht = 3.351x   sr = 3.488x   e4m3+global_scale = 2.920x
-  (this factor also varies run to run, same as the base timings; not a fixed
-  constant of the hardware)
+Main-grid compute (single-process cost model):      22,574.7 s ( 6.271 h)
+Reference-config compute (single-process cost model): 2,350.8 s ( 0.653 h)
+TOTAL, serial (1 core, single-process cost model):   24,925.5 s ( 6.924 h)
+TOTAL, parallel, IDEAL SCALING (12 cores, naive):     2,077.1 s ( 0.577 h)  [reference only]
 
-Main-grid compute:        282,183.7 s (78.384 h)
-Reference-config compute:   4,425.6 s ( 1.229 h)
-TOTAL, serial (1 core):    286,609.4 s (79.614 h)
-TOTAL, parallel (12 cores detected): 23,884.1 s (6.634 h)
+REAL multiprocessing sample: 32 cells x 150 trials = 4,800 trials, Pool(processes=12).
+  ideal-scaling prediction for this sample:      6.3 s (0.002 h)
+  ACTUALLY MEASURED wall-clock for this sample: 88.3 s (0.025 h)
+  measured parallel efficiency vs. ideal scaling: 0.071 (7.1%)
 
-8h gate check (serial):    79.614 h EXCEEDS the 8h budget.
-8h gate check (parallel):   6.634 h within the 8h budget.
+TOTAL, parallel, MEASURED (headline):  29,223.9 s ( 8.118 h)  EXCEEDS the 8h budget
+  cross-check (direct sample throughput): 32,733.6 s ( 9.093 h)  EXCEEDS the 8h budget
 ```
 
-The parallel figure assumes perfect embarrassingly-parallel scaling across
-cells (no process-pool/IPC overhead modeled) -- multiprocessing execution
-itself is not implemented by this script, only the estimate. Measured on a
-12-core machine (`os.cpu_count()`).
+Measured parallel efficiency itself ranged from 7.1% to 119.2% of the naive
+ideal-scaling prediction across the five runs -- i.e. real multiprocessing
+execution was sometimes markedly *slower* than ideal scaling (as low as 7%
+efficiency) and once measured *faster* than the ideal-scaling number computed
+in that same noisy run (119%, meaning that run's single-process cost model
+happened to read unusually high relative to the real measurement, not that
+parallel execution beat theoretical serial/n_cores). This is a direct,
+measured demonstration that "ideal scaling" is not a safe assumption here in
+either direction, which is exactly why the task asked for a real measurement
+instead of one.
 
-**Serial execution reliably and substantially exceeds the 8-hour budget --
-by 7x to 13x across every run, never close.** Parallel execution (12 cores,
-ideal scaling) is a **genuinely borderline call**: its estimate straddles the
-8h gate depending on measurement noise alone (4.5-8.5h observed), not because
-the grid moved. Anyone deciding whether to cut the grid should not treat the
-single "6.996h, within budget" number from any one run as a clean pass --
-across five independent measurements it crossed the gate once. Increasing
-`--dry-run-reps` narrows the per-call estimate's own noise but does not
-remove the run-to-run system-load variance seen above. Per this step's own
-instructions, this script and this section do not decide whether to cut the
-grid -- that is a human call, to be made **before** anything is launched, not
-after. The numbers are reported here and the decision is left open.
+**Verdict: this does NOT reliably clear the 8h gate, and is not a clean
+pass.** The MEASURED headline figure exceeded 8h in 1 of 5 independent runs
+(8.12h); the cross-check exceeded it in 2 of 5 (8.49h, 9.09h); and even the
+serial (single-core) estimate -- which exceeded 8h in every one of the five
+pre-cut runs -- now clears it in 2 of 5 post-cut runs. The cut roughly halved
+the grid's compute as expected, but the honest read of five independent
+measurements is "genuinely borderline, could go either way on a given
+invocation," not "clears with margin." Per this step's own instructions, if
+the measured estimate exceeds 8h that is reported plainly and this stops
+here: **it exceeded 8h at least once, so no further cut is applied or decided
+in this step.** Whether the block_size cut alone is sufficient, or whether a
+second cut (or accepting the risk, or a controlled/quieter benchmarking
+environment) is warranted, is a human call, to be made **before** anything is
+launched -- not made here.

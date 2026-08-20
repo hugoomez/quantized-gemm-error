@@ -1,0 +1,39 @@
+{
+  "accum": "exact",
+  "ci_percentiles": [
+    2.5,
+    97.5
+  ],
+  "distribution": "t-student",
+  "element_format": "e2m1",
+  "grid_block_size": [
+    16,
+    32
+  ],
+  "grid_n": [
+    64,
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096
+  ],
+  "grid_nu": [
+    1.0,
+    30.0
+  ],
+  "level_comparison_n": 1024,
+  "n_bootstrap": 10000,
+  "out_cols": 64,
+  "out_rows": 64,
+  "rht": false,
+  "round_mode": "rtne",
+  "scale_format": "e8m0",
+  "script": "probe_n_scaling.py",
+  "seed": 0,
+  "slope_match_tol": 0.02,
+  "trials": 500,
+  "use_global_scale": false,
+  "version": 1
+}

@@ -1,0 +1,34 @@
+n-scaling probe under exact accumulation: 500 trials per cell, shape (64 x n) @ (n x 64), 2048000 BE values per cell, 28 cells. Total runtime 4.8 min.
+
+CONFIGURATION HELD FIXED ACROSS EVERY CELL: scale_format='e8m0', use_global_scale=False, element_format='e2m1', round_mode='rtne', accum='exact', no RHT. The scale format is deliberately held constant so that block_size is the only quantizer parameter that moves, which isolates the block mechanism. THIS REPRODUCES NEITHER MXFP4 NOR NVFP4: MXFP4 is (block 32, E8M0, no global scale) and NVFP4 is (block 16, E4M3, global scale), so the block_size=16 arm here is an experimental control corresponding to no hardware format, no specification and no vendor.
+
+FITTED LOG-LOG SLOPES of median(BE) vs n:
+
+  block_size=16  nu=1  slope = -0.1395 +/- 0.0016  (95% CI [-0.1412, -0.1380])
+      resembles none of the three -- nearest is +0.0 (flat (~0)) at offset -0.1395, outside the 0.02 reporting threshold. Distances to each reference: +0.0: 0.140, -0.5: 0.360, -1.0: 0.860
+  block_size=32  nu=1  slope = -0.1436 +/- 0.0018  (95% CI [-0.1454, -0.1418])
+      resembles none of the three -- nearest is +0.0 (flat (~0)) at offset -0.1436, outside the 0.02 reporting threshold. Distances to each reference: +0.0: 0.144, -0.5: 0.356, -1.0: 0.856
+  block_size=16  nu=30  slope = -0.4978 +/- 0.0006  (95% CI [-0.4983, -0.4972])
+      resembles the ~-0.5: cancellation among ~n/block_size roughly-independent blocks pattern -- offset +0.0022, inside the 0.02 reporting threshold (the CI excludes it, by 0.0017)
+  block_size=32  nu=30  slope = -0.4966 +/- 0.0006  (95% CI [-0.4973, -0.4960])
+      resembles the ~-0.5: cancellation among ~n/block_size roughly-independent blocks pattern -- offset +0.0034, inside the 0.02 reporting threshold (the CI excludes it, by 0.0027)
+
+LEVEL COMPARISON at n = 1024 (height of the curve, not slope):
+
+  nu=1:  block16 = 0.073155   block32 = 0.0966077   ratio 32/16 = 1.3206 (95% CI [1.3068, 1.3324])
+      block 32 sits at a measurably greater height than block 16. Against sqrt(32/16) = 1.4142, the level ratio the block-cancellation reading would predict: the CI excludes it (observed 1.3206).
+  nu=30:  block16 = 0.0054071   block32 = 0.00559321   ratio 32/16 = 1.0344 (95% CI [1.0317, 1.0373])
+      block 32 sits at a measurably greater height than block 16. Against sqrt(32/16) = 1.4142, the level ratio the block-cancellation reading would predict: the CI excludes it (observed 1.0344).
+
+WHICH REFERENCE PATTERN THE DATA RESEMBLES, stated separately per nu:
+
+  nu = 1: slopes are -0.1395 (block 16) and -0.1436 (block 32).
+      block 16: resembles none of the three -- nearest is +0.0 (flat (~0)) at offset -0.1395, outside the 0.02 reporting threshold. Distances to each reference: +0.0: 0.140, -0.5: 0.360, -1.0: 0.860
+      block 32: resembles none of the three -- nearest is +0.0 (flat (~0)) at offset -0.1436, outside the 0.02 reporting threshold. Distances to each reference: +0.0: 0.144, -0.5: 0.356, -1.0: 0.856
+      slope(block 32) - slope(block 16) = -0.0040 (95% CI [-0.0064, -0.0016]) -- smaller in magnitude than the 0.02 reporting threshold, so the two block sizes share a slope to within it.
+  nu = 30: slopes are -0.4978 (block 16) and -0.4966 (block 32).
+      block 16: resembles the ~-0.5: cancellation among ~n/block_size roughly-independent blocks pattern -- offset +0.0022, inside the 0.02 reporting threshold (the CI excludes it, by 0.0017)
+      block 32: resembles the ~-0.5: cancellation among ~n/block_size roughly-independent blocks pattern -- offset +0.0034, inside the 0.02 reporting threshold (the CI excludes it, by 0.0027)
+      slope(block 32) - slope(block 16) = +0.0012 (95% CI [+0.0002, +0.0020]) -- smaller in magnitude than the 0.02 reporting threshold, so the two block sizes share a slope to within it.
+
+This is a probe, not a decision. It reports the measured scaling and nothing more; what functional form the theoretical bound should take -- including whether it should carry an n-dependence at all, and on what argument -- is a human call made on review. qgemm.bounds is untouched by this script.

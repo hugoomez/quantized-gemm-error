@@ -1326,3 +1326,197 @@ It also **does not close PREREGISTRATION.md section 7 item 1** (the eight nu
 values). The grid used here is a diagnostic choice; freezing it for the
 confirmatory run requires a dated amendment under section 8, which this
 section is not.
+
+## n-scaling probe under exact accumulation -- PROPOSED, pending review
+
+**Status: a measurement, not a decision.** Nothing in this section is
+implemented anywhere in the codebase. `qgemm.bounds` is untouched and still
+contains only `gamma_n`; `qgemm.metrics` is untouched. This section exists to
+feed the open conceptual question of how a theoretical error bound for
+block-scaled formats should be defined -- specifically, whether such a bound
+should carry an `n`-dependence at all and, if so, on what argument. **That
+decision is not made here and nothing below should be read as making it.** It
+needs human review before `bounds.py` is implemented.
+
+Produced by `scripts/probe_n_scaling.py` (one run, no manual steps, 4.8 min);
+data and figures under
+`results/diagnostics/n_scaling/probe_n_scaling_44503b1d4f36*`, the digest being
+the sha256 of the run config saved alongside.
+
+### Why the question is open
+
+The classical bounds -- `gamma_n = n*u / (1 - n*u)` and the probabilistic
+`sqrt(n)*u` -- take their `n`-dependence from **repeated rounding during
+accumulation**: `n` sequential partial sums, each rounded once. This project's
+primary route accumulates in exact float64 (`accum="exact"`), so that mechanism
+is *absent by construction*: the residual `qgemm(A, B, cfg) - A @ B` is
+input-quantization error and nothing else. The `gamma_n` sanity check above
+already found the corresponding empirical consequence in a different setting
+(fp16 inner products): `median(BE)` was flat in `n`, slope about `-0.02`,
+because numerator and denominator grow at the same rate.
+
+So any `n`-dependence measured here comes from some other mechanism. Two were
+posed in advance, and the probe was designed to separate them:
+
+* **Cancellation.** The numerator `|sum_k eps_k|` sums `n` signed
+  quantization errors that partially cancel; the denominator
+  `sum_k |a_k||b_k|` grows like `n` with no cancellation. Elements sharing a
+  block share a *scale*, so their errors are not independent, and the effective
+  number of roughly-independent summands may be the number of **blocks**,
+  `n / block_size`, rather than `n`. That reading predicts
+  `median(BE) ~ sqrt(block_size / n)`: slope **-0.5 at both block sizes**, with
+  block 32 sitting a factor `sqrt(2) = 1.414` **above** block 16 in level.
+* **Extreme-value dominance.** Under heavy tails the numerator may be owned by
+  a single worst block rather than averaged over many, so growing `n` buys
+  progressively less cancellation. That reading predicts a slope flattening
+  toward 0, or a slope that itself differs between block sizes -- something the
+  `n / block_size` rescaling **cannot** produce, since rescaling a power law's
+  argument by a constant moves its level, never its exponent.
+
+### What was measured
+
+`block_size in {16, 32}` x `nu in {1, 30}` x `n in {64, 128, 256, 512, 1024,
+2048, 4096}`, 500 independent trials per cell (a cheap probe -- fewer than a
+confirmatory sweep cell would use), 28 cells, 2 048 000 `BE` values per cell.
+Shape `(m=64, n) @ (n, k=64)`: small fixed output dimensions with only the
+contraction length varying, the same convention
+`scripts/check_metric_stability.py` uses. Every `n` is a multiple of both block
+sizes, so no cell ever gets a short trailing block and the tail policy is held
+out of the comparison.
+
+**Held fixed across every cell, deliberately:** `scale_format="e8m0"`,
+`use_global_scale=False`, `element_format="e2m1"`, `round_mode="rtne"`,
+`accum="exact"`, no RHT. Fixing the scale format is the whole design: it makes
+`block_size` the only quantizer parameter that moves, which is what isolates
+the block mechanism.
+
+**This reproduces neither MXFP4 nor NVFP4, and must not be read as doing so.**
+MXFP4 is `(32, e8m0, no global scale)` and NVFP4 is `(16, e4m3, global scale)`.
+The `block_size=32` arm here therefore coincides with MXFP4, but the
+`block_size=16` arm is `(16, e8m0, no global scale)` -- one of the six
+**experimental controls** in the table above, corresponding to no hardware, no
+specification and no vendor. Nothing here benchmarks or endorses a format.
+
+`median(BE)` per cell is the **median over trials of each trial's median** over
+its 64x64 = 4096 output elements, the trial being the resampling unit
+(PREREGISTRATION.md sec 3.2). The pooled median over all `trials x 4096` values
+is tabulated alongside rather than assumed equal to it; the two agree to within
+0.56% in the worst cell and 0.09% typically, so the choice between them does
+not carry any result below.
+
+### Result 1: fitted log-log slopes of median(BE) vs n
+
+Percentile bootstrap, B = 10 000, resampling trials independently at each `n`.
+
+| `block_size` | `nu` | slope | 95% CI |
+|---|---|---|---|
+| 16 | 1 | **-0.1395** | [-0.1412, -0.1380] |
+| 32 | 1 | **-0.1436** | [-0.1454, -0.1418] |
+| 16 | 30 | **-0.4978** | [-0.4983, -0.4972] |
+| 32 | 30 | **-0.4966** | [-0.4973, -0.4960] |
+
+Slope *difference* between block sizes, bootstrapped on the same replicates:
+`-0.0040` [-0.0064, -0.0016] at `nu = 1`, and `+0.0012` [+0.0002, +0.0020] at
+`nu = 30`. Both differences are formally nonzero and both are two orders of
+magnitude smaller than the gap between any two reference patterns.
+
+A note on reading these CIs: at 500 trials they are narrow enough
+(half-width ~0.001) that a slope of `-0.4978` is *formally* distinguishable
+from exactly `-0.5`. The script therefore reports the distance to the nearest
+reference separately from whether the CI contains it, against a stated 0.02
+reporting threshold fixed before the run. That threshold is a reporting
+convention, **not** a hypothesis test, and it is not proposed as a criterion for
+anything downstream.
+
+### Result 2: the level, at matched n = 1024
+
+| `nu` | block 16 | block 32 | ratio 32/16 | 95% CI |
+|---|---|---|---|---|
+| 1 | 0.073155 | 0.096608 | **1.3206** | [1.3068, 1.3324] |
+| 30 | 0.005407 | 0.005593 | **1.0344** | [1.0317, 1.0373] |
+
+At `nu = 1` the two curves sit at visibly different heights (about 32% apart).
+At `nu = 30` they are **close to superimposed** -- separable, but by 3.4%.
+Neither ratio's CI contains `sqrt(32/16) = 1.4142`, and at `nu = 30` the
+observed ratio is nowhere near it.
+
+Full `median(BE)` table, all 28 cells:
+
+| `block_size` | `nu` | n=64 | 128 | 256 | 512 | 1024 | 2048 | 4096 |
+|---|---|---|---|---|---|---|---|---|
+| 16 | 1 | 0.106879 | 0.098245 | 0.089427 | 0.080481 | 0.073155 | 0.066115 | 0.060341 |
+| 32 | 1 | 0.141508 | 0.130849 | 0.118004 | 0.106922 | 0.096608 | 0.086432 | 0.078789 |
+| 16 | 30 | 0.021425 | 0.015202 | 0.010793 | 0.007639 | 0.005407 | 0.003823 | 0.002705 |
+| 32 | 30 | 0.022030 | 0.015711 | 0.011135 | 0.007894 | 0.005593 | 0.003959 | 0.002796 |
+
+Figure: `probe_n_scaling_44503b1d4f36_n_scaling.png`, log-log, one panel per
+`nu`, both block sizes overlaid with the three reference slopes drawn as guides
+anchored at `n = 64`, so slope and level are both readable at a glance.
+
+### Result 3: which reference pattern the data resembles -- stated per nu
+
+The two `nu` do **not** give the same answer, and are not forced into one
+verdict.
+
+**`nu = 30` (near-Gaussian): the data resemble the `-0.5` pattern, cleanly.**
+Both block sizes fit `-0.497`, they agree with each other to `0.0012`, and the
+curves are straight over the full 6-octave range of `n`. `median(BE)` falls by
+a factor of about 7.9 from `n = 64` to `n = 4096` (a factor of 64 in `n`);
+`sqrt(64) = 8`. This is the magnitude the classical probabilistic bound has,
+arrived at with **no accumulation rounding anywhere in the pipeline** -- which
+is the observation worth carrying into review, since it means a `sqrt(n)`
+shape here would describe a different mechanism than the one `sqrt(n)*u`
+classically describes.
+
+**But the level does not follow the `n / block_size` reading.** A slope of
+`-0.5` on its own does not identify what the independent summand is: replacing
+`n` by `n / block_size` rescales the argument by a constant, which shifts the
+curve's height by `sqrt(block_size)` and leaves the slope untouched. The level
+is therefore the only thing that discriminates, and it shows a 32/16 ratio of
+**1.034**, not the **1.414** that treating the block as the unit of
+independence predicts. Read plainly: the `-0.5` slope is there, but the block
+structure is *not* visible in the level at anything like the strength the
+simple block-count rescaling requires. Whatever sets the effective sample size
+at `nu = 30`, the data do not show it scaling with `block_size`.
+
+**`nu = 1` (heavy-tailed): the data resemble none of the three references.**
+The slope is about `-0.14` at both block sizes -- well away from flat, well
+away from `-0.5`, and nowhere near `-1`. It sits between flat and `-0.5`, about
+2.6 times closer to flat (0.140 from one, 0.360 from the other). `median(BE)`
+falls by only a factor of 1.77 over the same 64-fold range in `n`.
+
+The two block sizes share this slope: the difference is `-0.0040`, about 3% of
+the slope itself and one 125th of the 0.5 gap between the two nearest
+reference patterns. So the "slopes differ between block sizes" signature of
+extreme-value dominance is
+**not** present -- what is present is a common slope that is strongly flattened
+relative to `-0.5`, which is the *other* signature that reading predicts
+(cancellation being progressively bought off by single-block dominance as `n`
+grows). The block size shows up in the **level** instead: 1.32 at `nu = 1`
+against 1.03 at `nu = 30`, so the block structure is far more visible in the
+error's height under heavy tails than under near-Gaussian data.
+
+### What this does not settle
+
+* **It does not choose a functional form for the bound.** Two `nu` give two
+  different scalings (`-0.50` and `-0.14`), so any single `n`-exponent would
+  have to be justified as covering both, or the bound would have to be
+  `nu`-dependent, or `n`-independent and conservative. Which of those is right
+  is exactly the question under review, and this probe deliberately stops short
+  of it.
+* **It does not explain the mechanism.** The slope/level split above is a
+  description of two measured numbers, not a demonstration of what generates
+  them. In particular the level ratio confounds two effects that this probe
+  cannot separate: how much cancellation the block structure permits, and the
+  fact that a larger block gives its shared scale more elements to cover and so
+  a larger per-element quantization error in the first place. Separating those
+  needs a measurement of the per-element error distribution at fixed `n`, which
+  was not run.
+* **Scope.** Two block sizes, two `nu`, one scale format (`e8m0`, no global
+  scale), one shape family, RTNE only, no RHT, exact accumulation only, 500
+  trials. It says nothing about E4M3 scales, global scales, block sizes 8 and
+  64, stochastic rounding, the RHT, or `accum="bf16"` -- and in particular
+  nothing about NVFP4, whose scale format is not the one held fixed here.
+* **It closes no PREREGISTRATION.md item.** The grid, the trial count and the
+  0.02 reporting threshold are diagnostic choices, not frozen commitments; none
+  of them is a dated amendment under section 8.

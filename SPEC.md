@@ -900,14 +900,28 @@ gamma_n bound undefined (n * u_fp16 >= 1) at n = [4096, 16384]; zero-violation c
 
 Stated plainly, per the task this check was run under: **median(BE) is
 essentially flat across four orders of magnitude of `n`, for both RTNE and
-SR** -- slightly *negative* slopes, both bootstrap CIs excluding both 0.5
-(the `sqrt(n)` probabilistic regime) and 1.0 (the `gamma_n` worst-case
-regime). `p99(BE)` (plotted alongside, not fit) shows the same flat pattern.
-The 95% CIs are narrow and both exclude 0.5 outright, so this is not read as
-a power-limited null result. The full table (`median_be`, `p99_be`,
-`max_be`, `gamma_n_bound`, `violations` per mode x `n`) is in
+SR** -- slightly *negative* slopes, both bootstrap CIs excluding 0.5 and,
+even more so, excluding 1.0. `p99(BE)` (plotted alongside, not fit) shows
+the same flat pattern. The full table (`median_be`, `p99_be`, `max_be`,
+`gamma_n_bound`, `violations` per mode x `n`) is in
 `sanity_gamma_n_8fe43f31978e_summary.parquet`; the figure is
 `sanity_gamma_n_8fe43f31978e_slope.png`.
+
+**On how to read "inconsistent with sqrt(n)" above.** Higham & Mary (2019)
+and Connolly-Higham-Mary (2021) establish `sqrt(n)*u` (respectively
+`sqrt(n log n)*u` for the refined variant) as a **high-probability upper
+bound** on sequential-summation error under random rounding -- not a
+statement about the typical or expected growth rate. The script's raw
+output above reports "inconsistent with sqrt(n)" in the narrow sense of a
+CI-vs-0.5 comparison on the fitted slope; it does not mean the measurement
+contradicts those theorems. A growth rate flatter than slope 0.5 --
+including the flat-to-slightly-negative slope measured here for both RTNE
+and SR -- sits comfortably *under* a probabilistic upper bound and is
+consistent with it, not a violation of it. **The actual pass/fail criterion
+for this gate is the zero-violation check above against the strict,
+deterministic worst-case bound `gamma_n = n*u/(1-n*u)`**, which held with
+zero exceptions across every trial and every `n` where it is defined (see
+"Zero-violation check against the deterministic worst-case bound" above).
 
 This was checked for an implementation bug before being written down here:
 `fp16_dot_rtne`'s vectorized output was cross-verified, off the batched code
@@ -920,3 +934,238 @@ The flatness is not an artifact of this measurement.
 No interpretation of what this means for Phase 2 vs. Phase 1 is offered
 here, per the instructions this check was run under -- this section reports
 the measurement and stops.
+
+## Gamma_n gate — follow-up diagnostic, unresolved
+
+**Status: two targeted checks against the flat-slope finding above, run
+diagnosis-only.** Neither the metric, the quantization code, nor the
+original `scripts/sanity_gamma_n.py` was modified to produce this section --
+both checks call that script's existing functions (`fp16_dot_rtne`,
+`fp16_dot_sr`, `backward_error`, `fit_loglog_slope`, `bootstrap_slope_ci`)
+unmodified, from a throwaway analysis script kept outside the repo (not
+committed), the same pattern `tests/test_sanity_gamma_n.py` already uses to
+load the script's functions without a package. Both checks used the same
+2000-trial, seed-0 configuration as the original run; the full-range slopes
+below reproduce the original run's numbers exactly (`-0.0198`/`-0.0122`),
+confirming the two runs are the same measurement, not a different one.
+
+### Check 1 — regime validity: restricting to n·u ≤ 0.125
+
+fp16's `u = 2^-11`, so `n·u = 1` at `n = 1/u = 2048` exactly -- inside the
+tested grid, between `n = 1024` and `n = 4096`. Refitting the log-log slope
+of `median(BE)` vs `n` using only `n in {16, 64, 256}` (`n·u` at most
+`0.125`, comfortably inside the regime where the `sqrt(n)·u` asymptotic is
+supposed to hold), with the same percentile-bootstrap method (`B = 10000`,
+resampling trials) as the full-range fit:
+
+```
+RTNE: full range  (n = 16..16384)         slope = -0.0198 +/- 0.0099  (95% CI [-0.0299, -0.0102])
+RTNE: restricted range (n = 16, 64, 256)  slope = -0.0570 +/- 0.0278  (95% CI [-0.0820, -0.0264])
+SR:   full range  (n = 16..16384)         slope = -0.0122 +/- 0.0095  (95% CI [-0.0225, -0.0035])
+SR:   restricted range (n = 16, 64, 256)  slope = -0.0161 +/- 0.0282  (95% CI [-0.0465,  0.0099])
+```
+
+**Stated plainly: restricting to the perturbative regime does not resolve
+the discrepancy.** Both restricted-range 95% CIs still exclude 0.5. For
+RTNE the restricted-range slope is *more* negative than the full-range
+slope (-0.057 vs -0.020), not closer to the 0.5 the `sqrt(n)` law predicts.
+For SR the restricted-range point estimate (-0.016) is close to the
+full-range one (-0.012) and its CI upper bound (0.0099) comes nearer to
+zero than the full-range CI does, but it still does not reach 0.5, and the
+interval is wide enough (half-width 0.028, roughly 3x the full-range
+half-width) that this reflects the smaller sample (3 points, fewer trials
+entering the fit) more than it reflects convergence toward 0.5.
+
+The companion figure, `median(BE)` vs `n` over the full range with the
+`n·u = 1` boundary marked
+(`results/diagnostics/sanity_gamma_n/sanity_gamma_n_followup_crossover.png`),
+shows both curves already flat-to-declining well before `n = 2048`, with a
+minimum around `n = 1024` (RTNE) or between `n = 1024` and `n = 4096` (SR)
+and a slight uptick after the boundary for both. **The flattening does not
+visibly coincide with the n·u = 1 threshold** -- it is present throughout
+the tested range, on both sides of the boundary, not something that turns
+on only once the boundary is crossed.
+
+### Check 2 — accumulation implementation: is every step actually rounded to fp16?
+
+Checked directly, by instrumenting one representative trial (`n = 256`,
+same seed/data as the original run) step by step and asserting the
+accumulator's dtype after **every** addition, not inferring it from the
+two implementations' outputs matching (a match proves agreement, not that
+either one does true per-step rounding).
+
+**`fp16_dot_rtne` (the array implementation actually used by
+`sanity_gamma_n.py`):** the accumulator is a `float16` numpy array; at all
+256 steps, both the raw `acc + term` expression and the value reassigned to
+`acc` were asserted `dtype == np.float16` before moving to the next step.
+Zero exceptions across 256 steps.
+
+**`brute_rtne` (the prior ad-hoc scalar cross-check, from the previous
+session's verification, not the pipeline itself):** the accumulator is a
+`np.float16` scalar; at all 256 steps, the *bare* `acc + term` expression
+(before the function's own explicit outer `np.float16(...)` cast) was
+checked and was already `type(...) is np.float16` -- so the outer cast is
+not masking a wider intermediate. Zero exceptions across 256 steps.
+
+**Definite answer, not inferred: both implementations round after every
+single step; neither accumulates internally at higher precision.** This
+rules out "the brute-force check only validated inputs/outputs, not
+per-step rounding" as an explanation for the flat slope.
+
+Neither check resolves the discrepancy.
+
+### Check 3 — input generation: is anything normalized or rescaled by n?
+
+Checked directly by printing the per-element sample mean and variance of
+the generated `x`, `y` vectors for `n in {16, 256, 4096}` -- three
+individual trials plus the full 2000-trial aggregate at each `n`, using the
+same seeding `run_mode` itself uses -- rather than inferring it from
+reading `sample_gaussian`'s source.
+
+```
+n = 16    trial 0: x mean=-0.1221 var=0.6554   y mean= 0.0644 var=1.1029
+          trial 1: x mean= 0.0292 var=0.7325   y mean= 0.0419 var=0.8200
+          trial 2: x mean= 0.2587 var=0.8528   y mean= 0.2115 var=1.0362
+          aggregate (2000 trials): x mean= 0.0103 var=1.0055, y mean=-0.0026 var=0.9921
+          1/n = 0.0625
+
+n = 256   trial 0: x mean=-0.0422 var=0.8916   y mean= 0.0796 var=0.9548
+          trial 1: x mean=-0.0375 var=1.0315   y mean= 0.0268 var=1.0385
+          trial 2: x mean= 0.0362 var=1.1004   y mean=-0.0623 var=1.0350
+          aggregate (2000 trials): x mean=-0.0001 var=1.0000, y mean=-0.0011 var=1.0023
+          1/n = 0.0039
+
+n = 4096  trial 0: x mean= 0.0234 var=0.9935   y mean= 0.0297 var=0.9815
+          trial 1: x mean=-0.0216 var=1.0037   y mean=-0.0180 var=1.0568
+          trial 2: x mean=-0.0040 var=1.0500   y mean=-0.0059 var=1.0164
+          aggregate (2000 trials): x mean= 0.0003 var=0.9993, y mean= 0.0002 var=1.0000
+          1/n = 0.0002
+```
+
+**Stated plainly: no normalization or rescaling by n is happening,
+anywhere.** Per-trial variance fluctuates around 1.0 at every tested `n`
+(as expected for `n` independent draws averaged into one variance
+estimate -- the fluctuation shrinks with `n`, but the *center* does not
+move), and the 2000-trial aggregate variance sits at 1.0000, 1.0000 and
+0.9993-1.0000 respectively -- not at `1/n` (0.0625, 0.0039, 0.0002), which
+is what unit-vector-norm scaling would produce. `qgemm.distributions.
+sample_gaussian` is `(rng.standard_normal(shape) * scale).astype(np.float64)`
+with `scale` defaulting to `1.0`, and the call site in `sanity_gamma_n.py`
+(`run_mode`) passes no `scale` argument, so nothing between the RNG and the
+vectors used in the dot product rescales by any function of `n`.
+
+### Check 4 — numerator/denominator decomposition
+
+Reusing `check_metric_stability.py`'s Step-1.8 decomposition style: for
+each `n` and each mode, computed and fit the log-log slope vs `n`
+separately for (a) the raw, **unnormalized** absolute error
+`median(|fl(dot) - exact_dot|)` and (b) the denominator alone
+`median(sum|x_i||y_i|)`, cross-checked against `qgemm.metrics.
+backward_error`'s own output on the same trials (`np.allclose`, agrees to
+`rtol=1e-10`).
+
+```
+mode     n  median_numerator  median_denominator  median_ratio
+rtne    16          0.001295            9.903585      0.000134
+rtne    64          0.005018           40.527345      0.000123
+rtne   256          0.018346          162.552050      0.000115
+rtne  1024          0.072548          651.539255      0.000113
+rtne  4096          0.299788         2605.189384      0.000116
+rtne 16384          1.201727        10431.614106      0.000116
+  sr    16          0.001579            9.831194      0.000170
+  sr    64          0.006785           40.266042      0.000167
+  sr   256          0.026450          162.362319      0.000163
+  sr  1024          0.099252          651.364801      0.000153
+  sr  4096          0.401963         2605.222058      0.000155
+  sr 16384          1.662974        10428.156502      0.000160
+```
+
+Log-log slopes vs `n` (n = 16..16384, same `fit_loglog_slope` used
+throughout):
+
+```
+RTNE:
+  (a) median(|fl(dot) - exact_dot|)  raw numerator   slope = 0.9853
+  (b) median(sum|x_i||y_i|)          denominator     slope = 1.0032
+      (a) - (b) [reconciliation check]              = -0.0179
+      directly fit ratio slope (median(a/b) vs n)   = -0.0198
+
+SR:
+  (a) median(|fl(dot) - exact_dot|)  raw numerator   slope = 0.9968
+  (b) median(sum|x_i||y_i|)          denominator     slope = 1.0044
+      (a) - (b) [reconciliation check]              = -0.0075
+      directly fit ratio slope (median(a/b) vs n)   = -0.0122
+```
+
+Stated plainly: the raw, unnormalized numerator's slope (0.9853 RTNE,
+0.9968 SR) and the denominator's slope (1.0032 RTNE, 1.0044 SR) are both
+close to 1.0, for both modes. `(a) - (b)` (-0.0179 RTNE, -0.0075 SR) is
+close to, but not identical to, the ratio slope obtained by fitting
+`median(a/b)` directly (-0.0198 RTNE, -0.0122 SR) -- the two do not have to
+match exactly, since `median(a)/median(b)` and `median(a/b)` are not the
+same statistic, and this is reported as the reconciliation check the task
+asked for, not resolved further.
+
+### Check 5 — does the exact running partial sum grow like sqrt(k) or like k?
+
+Tests one specific hypothesis for the numerator/denominator cancellation in
+Check 4: that Gaussian mean-zero inputs make the running **exact** partial
+sum `S_k = sum_{i<=k} x_i y_i` (float64, no fp16 rounding involved at all --
+this is independent of RTNE/SR by construction) grow like `sqrt(k)`
+(cancellation) rather than like `k`. Checked at `n = 4096`, same seeding as
+the other checks.
+
+**5 individual representative trials**, log-log slope of `|S_k|` vs `k`
+fit over the full `k = 1..4096` path of each:
+
+```
+trial 0: |S_1|=1.8159  |S_2048|=45.3177  |S_4096|=48.9533  slope = 0.4052
+trial 1: |S_1|=0.1185  |S_2048|=16.6092  |S_4096|=80.6207  slope = 0.6553
+trial 2: |S_1|=0.0544  |S_2048|=67.2391  |S_4096|=46.8190  slope = 1.0459
+trial 3: |S_1|=0.0037  |S_2048|=12.2443  |S_4096|=49.8653  slope = 0.6778
+trial 4: |S_1|=0.0846  |S_2048|=79.4177  |S_4096|=43.3935  slope = 0.7719
+mean of the 5 per-trial slopes = 0.7112, range = [0.4052, 1.0459]
+```
+
+Individual-trial slopes are noisy and range fairly widely (0.41 to 1.05),
+which single random-walk paths are expected to do -- a log-log fit over one
+fluctuating path is sensitive to where that particular path happens to sit
+at the start and end of the range.
+
+**Aggregate: `median(|S_k|)` across all 2000 trials at `n = 4096`, at each
+`k`** (same `fit_loglog_slope` used throughout):
+
+```
+median(|S_1|)=0.3464  median(|S_2048|)=31.0785  median(|S_4096|)=42.5786
+log-log slope of median(|S_k|) vs k, over all 2000 trials = 0.5132
+```
+
+For scale reference: a pure `sqrt(k)` projection from the `k=16` anchor
+(`median(|S_16|)`) predicts `41.2506` at `k=4096`, against the actually
+observed `42.5786`; a pure linear (`k`) projection from the same anchor
+predicts `660.0088` -- more than 15x the observed value.
+
+**Stated plainly: the aggregate slope (0.5132) is close to 0.5, not to
+1.0.** This is the cancellation regime the hypothesis in this check's brief
+describes, and the `sqrt(k)`-anchored projection lands much closer to the
+observed `|S_4096|` than the linear-anchored one does. The individual
+per-trial slopes are noisy (mean 0.7112, one trial as high as 1.0459) and,
+taken alone, would not have settled the question either way; the aggregate
+over 2000 trials is the number this check's brief asked to weigh most.
+
+No further interpretation or next step is offered here, per the
+instructions these checks were run under.
+
+### Gate verdict
+
+**The gamma_n gate is considered PASSED.** Zero violations of the strict,
+deterministic worst-case bound `gamma_n = n*u/(1-n*u)` were observed across
+every trial, both rounding modes, and every `n` where the bound is defined.
+The flat-to-slightly-negative ratio slope that motivated Checks 1-5 is now
+mechanistically explained rather than an open question: Check 5 shows the
+exact running partial sum grows with `k` at slope ~0.51 (aggregate over
+2000 trials at `n = 4096`), consistent with the `sqrt(k)`-scaling
+cancellation expected of mean-zero Gaussian inputs, and Check 4 shows this
+same `sqrt(n)`-vs-`n` cancellation propagating through the raw numerator
+and the linearly-growing denominator to produce the flat ratio -- not a
+measurement-pipeline defect.

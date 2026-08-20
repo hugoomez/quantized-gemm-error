@@ -1,0 +1,33 @@
+{
+  "accumulation": "exact (float64)",
+  "distribution": "t-student (gaussian at the nu = infinity end)",
+  "formats": [
+    "int8",
+    "fp8_e4m3"
+  ],
+  "fp8_recipe": "per-tensor, scale = amax/448, quantize_e4m3(x/scale) * scale",
+  "int8_recipe": "per-tensor symmetric, scale = amax/127, codes clipped to [-127, 127]",
+  "matrix_size": 512,
+  "nu_grid": [
+    "1",
+    "2",
+    "3",
+    "5",
+    "8",
+    "15",
+    "30",
+    "gaussian"
+  ],
+  "paper_id": "2408.02897",
+  "quantiles": [
+    0.25,
+    0.5,
+    0.75,
+    0.99
+  ],
+  "runtime_seconds_total": 54.2,
+  "script": "sanity_reproduce_2408.py",
+  "seed": 0,
+  "trials": 50,
+  "version": 1
+}

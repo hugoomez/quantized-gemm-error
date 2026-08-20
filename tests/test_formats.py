@@ -16,6 +16,7 @@ from qgemm.formats import (
     E8M0_GRID,
     E8M0_MAX,
     E8M0_MIN,
+    int8_quantize,
     quantize_e2m1,
     quantize_e4m3,
     quantize_e5m2,
@@ -723,4 +724,97 @@ def test_float8_input_is_not_mutated(fn):
     x = np.linspace(-7.0, 7.0, 101, dtype=np.float64)
     original = x.copy()
     fn(x)
+    np.testing.assert_array_equal(x, original)
+
+
+# ---------------------------------------------------------------------------
+# INT8 (symmetric, per-tensor)
+# ---------------------------------------------------------------------------
+#
+# No ml_dtypes reference here: int8 quantization is not a number format in the
+# sense the float8s are -- the grid depends on the *tensor*, through the single
+# amax-derived scale -- so the tests below pin the recipe itself (scale, code
+# range, symmetry, saturation) rather than a bit pattern.
+
+
+def test_int8_round_trip_on_known_values():
+    # amax = 127 makes the scale exactly 1.0, so the expected codes are the
+    # rounded inputs and no floating-point scaling obscures the comparison.
+    x = np.array([-127.0, -3.7, -0.4, 0.0, 42.2, 126.5, 127.0])
+    expected = np.array([-127.0, -4.0, -0.0, 0.0, 42.0, 126.0, 127.0])
+    np.testing.assert_array_equal(int8_quantize(x), expected)
+
+
+def test_int8_scale_is_amax_over_127():
+    rng = np.random.default_rng(0)
+    x = rng.standard_normal(1000) * 3.0
+    q = int8_quantize(x)
+    scale = np.max(np.abs(x)) / 127.0
+    codes = q / scale
+    np.testing.assert_allclose(codes, np.round(codes), atol=1e-9)
+    assert np.abs(codes).max() == 127.0
+
+
+def test_int8_is_symmetric_about_zero():
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal((7, 11)) * 5.0
+    np.testing.assert_array_equal(int8_quantize(-x), -int8_quantize(x))
+
+
+def test_int8_reproduces_the_extreme_element_exactly():
+    # The element attaining amax lands on code +-127 by construction, so it is
+    # the one input value the round trip is exact on.
+    x = np.array([-100.0, 0.3, 50.0, 7.0])
+    np.testing.assert_array_equal(int8_quantize(x)[0], -100.0)
+    np.testing.assert_array_equal(int8_quantize(-x)[0], 100.0)
+
+
+def test_int8_codes_never_leave_the_symmetric_range():
+    rng = np.random.default_rng(2)
+    # Heavy tails: one huge outlier sets amax, everything else is tiny.
+    x = np.concatenate([rng.standard_normal(5000), np.array([1e6, -1e6])])
+    q = int8_quantize(x)
+    codes = q / (np.max(np.abs(x)) / 127.0)
+    assert codes.min() >= -127.0
+    assert codes.max() <= 127.0
+    assert np.abs(q).max() <= np.abs(x).max()
+
+
+def test_int8_saturates_rather_than_wrapping_at_the_top_code():
+    # A value a hair above amax cannot occur from the same tensor, but the
+    # clip is what guarantees round-off at the top code cannot produce 128.
+    x = np.array([np.nextafter(1.0, 2.0), -1.0, 0.5])
+    q = int8_quantize(x)
+    codes = q / (np.max(np.abs(x)) / 127.0)
+    assert np.abs(codes).max() == 127.0
+
+
+def test_int8_all_zero_tensor_returns_zeros():
+    x = np.zeros((3, 4))
+    q = int8_quantize(x)
+    np.testing.assert_array_equal(q, np.zeros((3, 4)))
+
+
+def test_int8_rejects_non_float64_input():
+    with pytest.raises(TypeError, match="float64"):
+        int8_quantize(np.array([1.3], dtype=np.float32))
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_int8_rejects_non_finite_input(bad):
+    with pytest.raises(ValueError, match="finite"):
+        int8_quantize(np.array([1.0, bad, -2.0]))
+
+
+def test_int8_output_is_float64_and_shape_preserving():
+    x = np.linspace(-7.0, 7.0, 24, dtype=np.float64).reshape(2, 3, 4)
+    q = int8_quantize(x)
+    assert q.dtype == np.float64
+    assert q.shape == x.shape
+
+
+def test_int8_input_is_not_mutated():
+    x = np.linspace(-7.0, 7.0, 101, dtype=np.float64)
+    original = x.copy()
+    int8_quantize(x)
     np.testing.assert_array_equal(x, original)

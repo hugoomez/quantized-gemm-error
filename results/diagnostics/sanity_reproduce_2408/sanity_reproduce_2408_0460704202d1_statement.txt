@@ -1,0 +1,18 @@
+Reproduction target: arXiv:2408.02897, qualitative only (no shared code or seeds; no numeric value is claimed to be matched).
+50 trials per cell, 512x512 operands, seed 0, 54.2s total.
+
+median BE, INT8 / FP8-E4M3 / ratio, by nu:
+  nu=1         INT8 0.3294   FP8 0.03449   ratio 9.55x
+  nu=2         INT8 0.06672   FP8 0.003393   ratio 19.7x
+  nu=3         INT8 0.01496   FP8 0.00245   ratio 6.11x
+  nu=5         INT8 0.003279   FP8 0.002034   ratio 1.61x
+  nu=8         INT8 0.001693   FP8 0.001894   ratio 0.894x
+  nu=15        INT8 0.001081   FP8 0.001817   ratio 0.595x
+  nu=30        INT8 0.0008707   FP8 0.001783   ratio 0.488x
+  nu=gaussian  INT8 0.0007133   FP8 0.001748   ratio 0.408x
+
+INT8/FP8 median ratio at the heaviest tail (nu=1): 9.55x
+INT8/FP8 median ratio at the Gaussian end:         0.408x
+Change in that ratio across the grid:              23.4x
+
+The paper's claim reproduces qualitatively if and only if the ratio grows as nu decreases. It does NOT reproduce if the ratio is flat (both formats degrade alike) or falls below 1 (the effect is inverted). Read the number above, not the expectation.

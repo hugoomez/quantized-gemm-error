@@ -24,6 +24,20 @@ dtype, finite max). Implemented so far:
 All four take float64 and return float64. `quantize_e2m1` additionally
 takes a rounding `mode`; the three float8 quantizers are RTNE only.
 
+`int8_quantize(x)` is listed separately because it is not a number format
+in the same sense: it is **symmetric per-tensor INT8**, whose grid depends
+on the tensor rather than on the encoding alone --
+`scale = amax(|x|)/127`, `q = clip(round(x/scale), -127, 127)`, output
+`q * scale`. Uniform grid, no zero point, and the `-128` code is given up
+so the grid is exactly symmetric (`int8_quantize(-x) == -int8_quantize(x)`
+holds identically). Ties round to even, as elsewhere in this module,
+though here "even" is an even integer code. There is no overflow encoding
+to fall into, so non-finite input is rejected rather than allowed to
+poison `amax` and hence every output element; an all-zero tensor is
+returned unchanged. It is the classical baseline used by the
+arXiv:2408.02897 reproduction below, and is deliberately **not** block
+scaled.
+
 The float8 reference is `ml_dtypes`. Note that `ml_dtypes` ships **two**
 E4M3 types: `float8_e4m3fn` (no infinity, max 448) is the deep-learning
 format used here, and `float8_e4m3` (has infinity, max 240) is a
@@ -1169,3 +1183,146 @@ cancellation expected of mean-zero Gaussian inputs, and Check 4 shows this
 same `sqrt(n)`-vs-`n` cancellation propagating through the raw numerator
 and the linearly-growing denominator to produce the flat ratio -- not a
 measurement-pipeline defect.
+
+## arXiv:2408.02897 reproduction -- MEASURED, qualitative match
+
+**Status: measured, and the qualitative claim reproduces.** This is an
+*external* check: `scripts/sanity_gamma_n.py` validated the measurement
+pipeline against theory (Higham's deterministic worst-case bound), and this
+validates it against an independent published empirical result. Neither
+substitutes for the other, and neither is a confirmatory run.
+
+Target: Rasquinha & Tabak (Google), "A Metric Driven Approach to Mixed
+Precision Training", arXiv:2408.02897 -- the methodologically closest prior
+work to this project. The four facts targeted, taken from this project's own
+reference material rather than from recall of the paper:
+
+* backward error defined at the **inner-product** level as
+  `BE = |L.R - Q(L,R)| / (|L|.|R|)`, which is exactly
+  `qgemm.metrics.backward_error` and is used here unmodified;
+* base case **512x512** matrices;
+* **t-Student** inputs across a varying normality parameter;
+* finding: **FP8 stays much more bounded than INT8 as the tails get heavier.**
+
+Produced by `scripts/sanity_reproduce_2408.py` (one run, no manual steps);
+data and figures under
+`results/diagnostics/sanity_reproduce_2408/sanity_reproduce_2408_0460704202d1*`,
+the digest being the sha256 of the run config saved alongside. **50 trials per
+(nu, format) cell**, each trial a fresh pair of 512x512 operands, so 13.1M
+inner products per cell; the whole grid took **54.2 s**.
+
+### The two recipes, and the FP8 choice this project had to make
+
+Both formats are quantized **per-tensor** -- one scale for the whole operand
+matrix, not the block scaling the main study uses for MXFP4/NVFP4. Operands
+are quantized, then multiplied in float64 (`accum="exact"`, the study's
+primary route), so the only error present is operand quantization.
+
+| | recipe |
+|---|---|
+| INT8 | `qgemm.formats.int8_quantize`: `scale = amax/127`, symmetric, codes clipped to `[-127, 127]` |
+| FP8-E4M3 | `scale = amax/448`, then `quantize_e4m3(x/scale) * scale` |
+
+The FP8 line is a **documented methodological assumption, not a hidden
+default.** This project does not have the paper's FP8 recipe, so the choice
+was made here: a per-tensor amax scale mirroring INT8's, rather than applying
+`quantize_e4m3` directly and relying on E4M3's native dynamic range. Two
+reasons, in order of force:
+
+1. *The unscaled route is not merely different, it is unusable on this grid.*
+   E4M3 has no infinity encoding and overflows to **NaN** (see the E4M3
+   section above). At `nu = 1` roughly **0.14%** of a 512x512 t-Student sample
+   exceeds 448, and a single NaN operand element turns the entire inner
+   product -- and hence the whole quantized product -- into NaN. There would
+   be no number to compare.
+2. *Fairness.* Giving both formats the same amax-derived per-tensor scale
+   means they differ only in the **grid** they land on, which is the
+   comparison the paper's claim is about. It is also the standard per-tensor
+   FP8 setting in practice.
+
+The trade this scale makes is explicit: the top of the range is guaranteed
+(the largest element maps to exactly `+-448`, so overflow cannot occur), and
+the bottom is at risk (elements more than `448 * 2**9` below amax fall under
+the smallest E4M3 subnormal and flush to zero). INT8 makes the same trade on a
+grid with far less dynamic range -- 127 codes, all of them uniform.
+
+### What was found
+
+Median BE per `nu`, pooled over all 13.1M inner products in the cell:
+
+| nu | 1 | 2 | 3 | 5 | 8 | 15 | 30 | gaussian |
+|---|---|---|---|---|---|---|---|---|
+| INT8 | 0.3294 | 0.06672 | 0.01496 | 0.003279 | 0.001693 | 0.001081 | 0.0008707 | 0.0007133 |
+| FP8-E4M3 | 0.03449 | 0.003393 | 0.002450 | 0.002034 | 0.001894 | 0.001817 | 0.001783 | 0.001748 |
+| INT8/FP8 | 9.55x | 19.7x | 6.11x | 1.61x | 0.894x | 0.595x | 0.488x | 0.408x |
+
+**The paper's qualitative claim reproduces.** As the tails get heavier, FP8
+stays bounded and INT8 does not: from the Gaussian end to `nu = 1`, median BE
+rises **462x** for INT8 and **19.7x** for FP8, and over the whole range
+`nu = 30` down to `nu = 2` the FP8 curve moves by under a factor of 2 (0.00178
+to 0.00339) while INT8 moves by 77x. That is the shape the paper reports, and
+it is visible directly in
+`sanity_reproduce_2408_0460704202d1_be_vs_nu.png`: an INT8 curve spanning
+nearly three decades against a near-flat FP8 curve.
+
+Three qualifications, none of which soften the direction but all of which
+bound what was actually shown:
+
+* **The advantage is not universal across the grid -- it reverses at light
+  tails.** At `nu >= 8` INT8 is the *better* format, by up to 2.4x at the
+  Gaussian end, and the two curves cross at `nu ~ 8`. This is expected rather
+  than anomalous (a uniform 127-code grid resolves near-Gaussian data more
+  finely than E4M3's 3-bit mantissa, whose relative step is ~2**-4), and it
+  does not contradict a claim about heavy tails. But "FP8 is more bounded than
+  INT8" is true here only *as a statement about the heavy-tail regime*, and
+  this project should not restate it unqualified.
+* **The ratio is non-monotone at the extreme.** It peaks at `nu = 2` (19.7x)
+  and falls back to 9.55x at `nu = 1`, because INT8 has saturated -- a median
+  BE of 0.33 means essentially all information in the operands is gone, so it
+  cannot get much worse -- while FP8's dynamic range is finally being
+  exhausted too. The FP8 advantage is largest in the middle of the heavy-tail
+  range, not at its edge.
+* **`nu = 1` is the one cell whose headline number is unstable.** Per-trial
+  medians there range over 0.0119-0.166 for FP8 (a 14x spread across
+  independent draws) against 0.316-0.340 for INT8, because the FP8 scale is
+  driven by the amax of a Cauchy sample, which has no finite mean. Every other
+  cell's per-trial medians sit within a few percent of the pooled median. The
+  `nu = 1` FP8 value should be read as an order of magnitude, not a
+  measurement.
+
+### Qualitative only -- what is not claimed
+
+**No numeric value from the paper is claimed to be matched, and none could
+be:** this project has neither the paper's code nor its seeds. Only the
+direction and rough order of magnitude are the target, and the script
+accordingly has no pass/fail tolerance (an earlier placeholder version of
+`scripts/sanity_reproduce_2408.py` was built around a `REFERENCE_VALUE` and a
+`REFERENCE_TOLERANCE`; that contract was dropped deliberately, since a
+tolerance gate against a number we cannot source is fake precision).
+
+Assumptions made here that could each account for numeric differences against
+the paper's own figures:
+
+1. **The FP8 per-tensor recipe** (`amax/448`) above -- the largest such
+   assumption, since the entire FP8 curve shifts with the choice of scale.
+2. **Exact float64 accumulation.** Any accumulator rounding in the paper's
+   setup adds a second error source this measurement does not contain.
+3. **No rescaling of the t-Student samples**, following
+   `scripts/check_metric_stability.py`'s `sample_t`; how the paper normalizes
+   its normality-parameter sweep is not known to this project.
+4. **The nu grid itself** (`1, 2, 3, 5, 8, 15, 30, gaussian`), which is this
+   project's grid, not the paper's.
+5. **RTNE throughout**, no stochastic rounding, no RHT.
+
+### Scope
+
+This diagnostic covers per-tensor INT8 and per-tensor FP8-E4M3 at one shape
+(512x512, so contraction dimension 512) with exact accumulation. It says
+nothing about the block-scaled MXFP4/NVFP4 formats the main study is actually
+about, nothing about other shapes or contraction dimensions, and nothing about
+stochastic rounding or the RHT.
+
+It also **does not close PREREGISTRATION.md section 7 item 1** (the eight nu
+values). The grid used here is a diagnostic choice; freezing it for the
+confirmatory run requires a dated amendment under section 8, which this
+section is not.

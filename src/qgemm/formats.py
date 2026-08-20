@@ -401,6 +401,82 @@ def quantize_e8m0(x: np.ndarray) -> np.ndarray:
     return np.where(invalid | (out == _E8M0_OVERFLOW), np.nan, out)
 
 
+# INT8: the classical baseline. Not a float format and not a member of the
+# microscaling family -- one scale for the whole tensor, and a uniform grid.
+INT8_MAX_CODE = 127.0
+
+
+def int8_quantize(x: np.ndarray) -> np.ndarray:
+    """Quantize float64 `x` to symmetric per-tensor INT8; float64 in, float64 out.
+
+    Recipe
+    ------
+    One scale for the entire tensor, derived from its largest magnitude:
+
+        scale = amax(|x|) / 127
+        q     = clip(round(x / scale), -127, 127)
+        out   = q * scale
+
+    This is the classical, deliberately simple INT8 baseline -- **not** block
+    scaling. Every element of `x`, however small, is measured against the same
+    step `scale`, which is what makes the format sensitive to a single large
+    outlier: one heavy-tailed element inflates `amax`, and the whole rest of
+    the tensor is then represented on a grid too coarse for it. That
+    sensitivity is the property under study, not a defect of this
+    implementation.
+
+    Symmetric, not affine
+    ---------------------
+    There is no zero point, and the code range is `[-127, 127]` rather than
+    the full `[-128, 127]` of a signed byte: the `-128` code is given up so
+    that the grid is exactly symmetric about zero, hence `int8_quantize(-x) ==
+    -int8_quantize(x)` holds identically. This is the standard symmetric
+    convention (it is also what makes the product of two quantized operands
+    decompose into a product of scales times an integer product).
+
+    Rounding and saturation
+    -----------------------
+    `np.round` is round-to-nearest, ties to even -- the same tie convention as
+    the float8 quantizers in this module, though here "even" is an even
+    *integer code*, since the INT8 grid is uniform and its codes are integers.
+
+    By construction no element can exceed `|127|` before clipping (the maximum
+    magnitude maps to exactly `±127`), so the `clip` is defensive: it bounds
+    the effect of round-off in the division at the top code, and guarantees the
+    result cannot wrap past the code range.
+
+    An all-zero tensor has `amax = 0` and therefore no usable scale; it is
+    returned unchanged rather than producing a division by zero.
+
+    Non-finite input is rejected. Unlike the float8 formats there is no
+    encoding to overflow into, and NaN or infinity in `x` would silently
+    poison `amax` and hence *every* output element, not just its own.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        float64 input, any shape. Not modified.
+
+    Returns
+    -------
+    np.ndarray
+        float64 array of the same shape; every entry is an integer multiple of
+        `amax(|x|) / 127` with integer factor in `[-127, 127]`.
+    """
+    if x.dtype != np.float64:
+        raise TypeError(f"expected float64 input, got {x.dtype}")
+    if not np.isfinite(x).all():
+        raise ValueError("int8_quantize requires finite input; got NaN or infinity")
+
+    amax = np.max(np.abs(x))
+    if amax == 0.0:
+        return np.zeros_like(x)
+
+    scale = amax / INT8_MAX_CODE
+    codes = np.clip(np.round(x / scale), -INT8_MAX_CODE, INT8_MAX_CODE)
+    return codes * scale
+
+
 @dataclass(frozen=True)
 class QuantFormat:
     name: str

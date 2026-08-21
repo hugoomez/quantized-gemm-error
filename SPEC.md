@@ -2628,3 +2628,38 @@ fit into `iter_main_cells`' schema; left for a follow-up rather than bolted on
 here. The full 640-cell launch is also explicitly out of scope for this step
 -- everything above was verified on small subsets only, per the task's own
 instruction not to launch the real grid yet.
+
+### Production run provenance (`sweep_e945b87a2395`)
+
+The full 640-cell main-grid run has since happened, and needed two
+invocations rather than one. The first was interrupted partway through by a
+thermal shutdown (this hardware -- see ENVIRONMENT.md, an Intel Core 7 150U
+thin-and-light chip -- sustaining 11 parallel workers at 100% across all
+cores for hours); the second completed the remainder via `--resume`.
+
+What's known from the final manifest
+(`results/sweep_e945b87a2395/manifest_20260821T160901168538Z.json`), which
+covers only the second (resumed) invocation:
+
+- `start_time` 2026-08-21T16:09:01Z, `end_time` 2026-08-21T18:40:56Z.
+- `cells_run_this_invocation`: 344. `cells_skipped_resume`: 296 (already
+  complete from the first invocation, correctly not recomputed).
+- `cells_error`: 0.
+
+**No manifest exists for the first invocation's own start time or
+duration** -- manifests are written only at the end of a completed
+`execute_sweep` call, and the first invocation never reached that point.
+This is a known provenance gap (there is no recorded wall-clock or start
+timestamp for that first stretch of the run), **not a data integrity
+issue**: the combined result was independently verified after the fact --
+`git_commit` in the surviving manifest matches the commit that was checked
+out, and the combined 640-cell output has exactly the expected 1,600,000
+rows (240 heavy-tail cells x 5000 trials + 400 light-tail cells x 1000
+trials), 0 duplicate `(cell_id, trial_index)` pairs, 0 nulls in the BE
+columns, and 0 entries in `errors.log`.
+
+A future long-running sweep on this hardware should account for its
+thermal limits up front (e.g. an elevated stand for airflow, or a lower
+`--jobs` count sustained over many hours) -- though `--resume` is exactly
+why this particular interruption was a non-issue for the data itself,
+just an avoidable delay.

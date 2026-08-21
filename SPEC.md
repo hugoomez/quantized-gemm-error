@@ -2367,3 +2367,264 @@ this is a property of the relative-error measure at a small denominator, not
 of the underlying invariance question, and it is why some of the e8m0 rows
 above (e.g. `1.6e+01` max relative discrepancy) look larger than the mean
 discrepancy for the same row would suggest.
+
+## Sweep execution harness (Step 3.3)
+
+**Status: the harness is implemented and tested on a small subset of the
+frozen grid; the full 640-cell launch has not happened.** This section
+documents `scripts/run_sweep.py`'s real execution path (as opposed to
+`--dry-run`, which only estimates timing and writes nothing): the storage
+schema, the seeding scheme, and confirmation of where Step 3.2's
+`normalize="mad"` decision actually takes effect.
+
+### Invocation
+
+```
+python scripts/run_sweep.py --config configs/sweep_main.yaml \
+    [--resume] [--cell-filter FIELD=VALUE[|VALUE2][,FIELD2=VALUE3]] \
+    [--jobs N] [--u-eff-n-elements N]
+```
+
+`--config` now does double duty, dispatched by file extension: a `.yaml`/
+`.yml` file runs this real, checkpointed main-grid harness; a `.json` file
+still runs the pre-existing toy sweep (`make run-sweep`'s `configs/
+default.json` path, unrelated to the Step 3.1 grid, left unchanged). `--dry-
+run` is untouched and still takes its own `--grid-config` flag.
+
+`--cell-filter` restricts execution to matching main-grid cells --
+comma-separated clauses are ANDed, `|`-separated values within one clause are
+ORed (e.g. `n=16|64,nu=1` selects `n in {16, 64}` at `nu == 1`). It exists so
+this step's own acceptance testing, and any future partial re-run, does not
+have to touch 640 cells to exercise the harness. `--jobs` controls
+parallelism across cells (`<=1` runs sequentially in the calling process, no
+`multiprocessing.Pool` at all -- see "Why jobs<=1 avoids Pool" below).
+`--u-eff-n-elements` (default 200 000) sizes the per-cell `measure_u_eff`
+draw independently of the trial budget, since u_eff is a per-configuration
+quantity, not a per-trial one.
+
+### Storage schema
+
+**Per-cell checkpoint (requirement 1).** Each main-grid cell, once every one
+of its trials has run and its `u_eff` has been computed, is written as a
+single file:
+
+```
+results/sweep_{grid_digest}/cells/cell_{cell_id}.parquet
+```
+
+`grid_digest` is `sha256(canonical_json(parsed sweep_main.yaml))[:12]`
+(`config_digest`, the same function the pre-existing toy-sweep path already
+uses) -- not a hash of the YAML file's raw bytes, so formatting-only changes
+to the file do not change the digest. `cell_id` is `sha256(canonical_json(
+cell_key))[:12]` where `cell_key` is the cell's identity (see "Seeding
+scheme" below) -- deterministic, so re-running the same grid always addresses
+the same cell to the same filename, which is what makes `--resume` a simple
+existence check.
+
+One row per **trial**, tidy/long format, exactly as the bootstrap CI in a
+later phase needs (PREREGISTRATION.md sec 3.2: the resampling unit is the
+*trial*, not the element -- an element-level bootstrap would be
+anticonservative, since elements within a trial share a row of `A`/`B` and a
+block scale). Columns:
+
+| column | meaning |
+|---|---|
+| `nu`, `n`, `block_size`, `scale_format`, `use_global_scale`, `round_mode`, `rht` | the six swept factors (`nu` stored as `str` -- see below) |
+| `element_format`, `accum`, `normalize` | constant across this grid (`"e2m1"`, `"exact"`, `"mad"`), stored explicitly rather than left implicit |
+| `cell_id` | this cell's identity hash, repeated on every row |
+| `trial_index` | `0..trials-1` |
+| `seed_data`, `seed_gemm` | the two derived seeds this trial used (see below) -- kept for audit/debugging, not required to reproduce the trial (the cell_key + trial_index already determine them) |
+| `be_median`, `be_p99`, `be_mean`, `be_max` | summary of that trial's `M x K` backward-error matrix; median and p99 are the minimum the bootstrap needs, mean/max are cheap to keep alongside |
+| `n_be_values`, `n_be_finite` | `M*K` and how many of those were finite (BE can be `nan`/`inf` where the denominator `(|A|@|B|)_ij` is exactly zero) |
+| `u_eff_p50`, `u_eff_p99` | this **cell's** effective unit roundoff (requirement 4) -- a per-configuration quantity, stored as a repeated column rather than a separate table, so the whole result stays one tidy frame with no join required downstream |
+
+`nu` is stored as `str` (`"1"`, `"gaussian"`, ...) rather than left as the
+mixed `int | "gaussian"` type `iter_main_cells` yields: a single Arrow/Parquet
+column cannot hold both, and canonicalizing to `str` is what `cell_key_from_
+cell` does before anything is hashed or written.
+
+**Why u_eff is a repeated column, not a separate table.** The task leaves
+this an open choice ("your call... whichever is cleaner"). A separate small
+manifest-per-cell table was considered and rejected: it would require a join
+key (`cell_id`) to reunite with the trial table for any analysis that wants
+both, two files to keep in sync per cell instead of one, and -- most
+concretely -- two independent things that could exist in inconsistent states
+after a kill (trial file present, u_eff file missing, or vice versa). A
+repeated column costs a few extra float64s per trial row (negligible next to
+the row itself) and makes every cell's checkpoint exactly one atomically-
+written file, which is also what keeps the kill/resume contract simple: a
+cell is either fully done (one file, both trial rows and u_eff present) or
+not done at all.
+
+**Combined output.** After every invocation (fresh or `--resume`), all
+present cell checkpoints under `cells/` are concatenated, sorted by `(cell_id,
+trial_index)`, and written to `results/sweep_{grid_digest}.parquet` (+
+`.config.json` alongside, the full parsed grid config) -- the same
+`sweep_{sha256(config)[:12]}.parquet` naming convention README.md already
+documents for every other result in this repo. This combine step is cheap
+(concatenation, not recomputation) and reruns on every invocation, so it is
+always current; it is not itself part of the checkpoint substrate the
+kill/resume contract depends on -- that is the per-cell files under `cells/`.
+
+**Manifest JSON, one per execution (requirement 5).**
+`results/sweep_{grid_digest}/manifest_{UTC timestamp}.json` (timestamped, not
+overwritten, since "per execution" means one file per *invocation* -- a
+`--resume` run gets its own manifest alongside the interrupted run's,
+recording only what that invocation itself did):
+
+```json
+{
+  "grid_config_hash": "...",
+  "git_commit": "... or null if git was unavailable",
+  "start_time": "... ISO 8601 UTC", "end_time": "...",
+  "wall_clock_seconds": 0.36,
+  "total_cells_requested": 640,
+  "cells_run_this_invocation": 12,
+  "cells_skipped_resume": 628,
+  "cells_ok": 12, "cells_error": 0,
+  "resume": true, "jobs": 12, "u_eff_n_elements": 200000,
+  "environment_md": "... full text of ENVIRONMENT.md, or null if absent"
+}
+```
+
+`environment_md` is a verbatim snapshot of `ENVIRONMENT.md`'s content at
+launch time -- reusing what `scripts/record_environment.py` already captures
+rather than re-deriving interpreter/OS/CPU/BLAS info inline (which would also
+mean shelling out to `pip freeze` on every sweep invocation, unnecessary
+overhead for what is otherwise a fast manifest write).
+
+**Errors, logged and non-fatal (requirement 6).** A cell whose execution
+raises is caught inside the worker (`process_cell`), turned into a
+`{"status": "error", "cell_key": ..., "error": ...}` result instead of
+propagating, and appended as one JSON line to
+`results/sweep_{grid_digest}/errors.log`. The rest of the sweep continues.
+Progress is reported via `tqdm` over the cell-level iterator (or
+`Pool.imap_unordered`, at `--jobs > 1`), so progress reflects cells completed,
+not trials -- the unit checkpointing and parallelism both operate on.
+
+### Seeding scheme
+
+**No global or shared RNG state anywhere in the harness.** Every
+`numpy.random.Generator` this code constructs (operand sampling, `GemmConfig`'s
+internal RHT/stochastic-rounding streams, the `u_eff` draw) traces back to a
+seed produced by one pure function, `derive_seed(cell_key, trial_index,
+stream)` (or `derive_cell_seed(cell_key, stream)` for the one per-cell, not
+per-trial, quantity):
+
+```
+payload = f"{canonical_json(cell_key)}|trial={trial_index}|stream={stream}"
+seed    = sha256(payload)[:8 bytes] -> uint64, masked to 63 bits
+```
+
+`cell_key` is the cell's canonical identity -- the six swept factors plus the
+three constants (`element_format`, `accum`, `normalize`), **excluding** the
+trial *count* (a property of how much a cell is sampled, not of which cell it
+is). `stream` separates independent uses within one trial the same way
+`GemmConfig`'s own three internal streams (RHT signs, SR for `A`, SR for `B`)
+are kept independent: `"data"` seeds the `Generator` that samples `A` and
+`B`, `"gemm"` becomes `GemmConfig.seed` (which `GemmConfig` further expands
+into its own three streams), and `compute_cell_u_eff` uses `derive_cell_seed`
+with stream `"u_eff"`, a distinct payload shape (no `trial=` component) so a
+per-cell quantity can never collide with a per-trial seed by construction.
+
+**Why this closes trap (1).** The seed is a pure function of plain, hashable,
+picklable values only -- never process identity, worker id, PID, or call
+order, none of which a worker process could observe consistently with
+another. Two `multiprocessing` workers computing the same `(cell_key,
+trial_index, stream)` -- whether because the same cell was resubmitted, or
+because a bug double-scheduled it -- therefore always agree exactly (a single
+cell is reproducible in isolation, independent of who runs it or when), while
+two *different* trials, cells, or streams are mixed through sha256 of a
+labeled string and never collide by construction, rather than through a
+shared counter that a global-RNG bug could desynchronize. Both directions are
+pinned as tests in `tests/test_run_sweep.py`: `test_different_trials_
+across_real_worker_processes_are_not_identical` runs two different trials of
+the same cell through two real `multiprocessing.Pool` workers and asserts
+their raw draws (and seeds) differ; `test_same_trial_across_real_worker_
+processes_is_reproducible` runs the *same* trial through two workers and
+asserts they agree exactly. A regression that made the harness reach for
+`np.random`'s global state, or seed from `os.getpid()`/worker identity,
+would fail one or the other.
+
+**Why `jobs<=1` avoids `Pool` entirely.** Not a seeding concern (seeding is
+already worker-identity-independent by construction) but a testability and
+efficiency one: at `jobs<=1`, `execute_sweep` runs cells sequentially in the
+calling process with no `multiprocessing.Pool`, so there is exactly one OS
+process doing the work -- which is what lets the kill/resume acceptance test
+below send a real `SIGKILL`/`TerminateProcess` to one PID and know it stopped
+everything, rather than a parent that dies while an orphaned pool worker
+keeps running.
+
+### Checkpoint atomicity (trap 2's other half)
+
+Per-cell checkpointing alone is not sufficient -- a process killed while
+*writing* a cell's parquet file could leave a truncated file that `--resume`
+might mistake for a completed cell. `_atomic_write_parquet` writes to
+`cell_{cell_id}.parquet.tmp` first, then `os.replace`s it onto the final
+name; `os.replace` is an atomic rename on both POSIX and Windows when source
+and destination share a filesystem (true here -- both live under the same
+`cells/` directory), so a kill mid-write leaves either a complete final file
+or a stray `.tmp` that `--resume`'s existence check (`cell_{cell_id}.parquet`,
+not `.tmp`) simply ignores and recomputes.
+`tests/test_run_sweep.py::test_a_stray_tmp_file_is_not_mistaken_for_a_completed_checkpoint`
+pins this directly, and the acceptance test below exercises it for real.
+
+### Acceptance test: kill and resume produce an EXACTLY identical result
+
+Per this step's grading criterion, `tests/test_run_sweep.py` includes a test
+that launches the actual CLI as a real subprocess
+(`test_kill_process_partway_through_then_resume_matches_uninterrupted_run`),
+on a 4-cell subset of the grid shape (2 `nu` x 2 `n`, everything else fixed):
+
+1. Run the subset to completion once, uninterrupted -- the reference result.
+2. Run it again from scratch in a fresh directory; poll for partial
+   checkpoint completion; send a real `kill()` (`TerminateProcess` on
+   Windows) once 1-3 of the 4 cells have checkpointed (not 0, not all 4).
+3. Re-invoke the CLI with `--resume` against that same directory.
+4. Assert the resumed run's combined result is **byte-identical** to the
+   reference: same row count, no duplicate `(cell_id, trial_index)` pairs, no
+   gaps, and `pandas.testing.assert_frame_equal` on the two combined frames
+   directly (not `allclose` -- exact).
+
+The test is inherently timing-dependent (it has to actually catch the process
+mid-sweep); if it cannot reliably observe a partial state within its polling
+window it `pytest.skip`s with an explicit message rather than passing
+vacuously. Across repeated local runs it has not needed to skip.
+Complementing it, a second, fully deterministic test
+(`test_resume_after_partial_completion_matches_uninterrupted_run`) exercises
+the identical property without relying on real-time process timing, by
+constructing the "partial" state directly (`--cell-filter` to run a strict
+subset, then `--resume` with the full grid) -- useful for fast, non-flaky
+regression coverage of the same contract in normal test runs.
+
+### `normalize="mad"` is active here -- confirmed, not assumed
+
+Every `numpy.random.Generator`-backed draw this harness makes for operand
+data goes through `_sampler_for`, which calls `sample_gaussian(..., normalize
+="mad")` or `sample_t(..., normalize="mad")` unconditionally -- there is no
+flag to turn it off in this path, and `cell_key_from_cell` records
+`"normalize": "mad"` in every cell's identity (and therefore in every output
+row) so this is visible in the data itself, not just in the code. This is
+Step 3.2's decision taking effect for the first time in a real data-generating
+path: every diagnostic committed before this step (`check_metric_stability.py`,
+`measure_u_eff.py`, `probe_n_scaling.py`, `sanity_reproduce_2408.py`) calls
+`sample_gaussian`/`sample_t` **without** `normalize`, unchanged, and stays on
+raw (unnormalized) scale by design -- those measurements answered questions
+that did not turn on cross-`nu` scale comparability (SPEC.md, "Cross-
+distribution normalization"), and Step 3.2 was explicit that the decision
+applies to the production sweep going forward, not retroactively. The `u_eff`
+computed per cell (`compute_cell_u_eff`) also draws through `_sampler_for`,
+so it is measured on the same normalized data the trials themselves see, not
+on raw-scale data -- consistent with what it is meant to characterize.
+
+### What is deliberately not in scope here
+
+The 72 reference-config cells (FP8-E4M3/E5M2 per-tensor, INT8 per-tensor;
+`sweep_main.yaml`'s `reference_configs`, outside the 640-cell factorial) are
+**not** executed by this harness yet. They have no `block_size`/
+`scale_format`/`rht` structure and no natural `GemmConfig` to feed
+`measure_u_eff`, so they need their own execution path rather than a forced
+fit into `iter_main_cells`' schema; left for a follow-up rather than bolted on
+here. The full 640-cell launch is also explicitly out of scope for this step
+-- everything above was verified on small subsets only, per the task's own
+instruction not to launch the real grid yet.

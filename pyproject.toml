@@ -37,6 +37,9 @@ packages = ["src/qgemm"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: exercises a real subprocess kill/resume; skips itself if it can't hit the timing window.",
+]
 
 [tool.ruff]
 line-length = 100

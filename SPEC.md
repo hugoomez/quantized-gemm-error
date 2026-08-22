@@ -2891,3 +2891,161 @@ reported as observed, not resolved into a single verdict for those `nu`
 values -- see the per-configuration table for which specific
 `(block_size, scale_format, round_mode, rht)` combinations land on which
 side.
+
+## Step 4.2 -- nu* localization (PRIMARY RESULT)
+
+**Status: measured, confirmatory. This is the project's primary result.**
+Locates nu* (PREREGISTRATION.md sec 1) -- the critical tail-weight where the
+bound `cota(n) = u_eff/sqrt(n)`, `c` fixed at 1 (SPEC.md, "Theoretical bound
+definition (🧠1) — RESOLVED") -- breaks, per PREREGISTRATION.md sec 3's break
+criterion applied exactly as written: broken at (family, nu) if the lower
+bound of the 95% bootstrap CI (B=10000, sec 3.2) of the median of the ratio
+`empirical_BE / cota(n_primary)` exceeds 1.0. Produced by
+`scripts/localize_nu_star.py`. Output under `results/analysis/nu_star/
+nu_star_e15f13a87939*` (16-row families table, 128-row detail, 80-row
+sensitivity table across all 5 `n`, statement, headline figure).
+
+### n_primary, and why this step could not start without it
+
+PREREGISTRATION.md sec 4.0 requires ONE `n_primary` for the nu* verdict,
+left ⚠ OPEN pending a dated amendment (sec 7 item 2). No such amendment
+existed anywhere in the document before this step. Picking a value after
+already having seen Step 4.1's per-n slope fits (which cover all 5 n's,
+`n_primary` included) would have been exactly the post-hoc researcher
+degree of freedom PREREGISTRATION.md sec 9 (R9) was written to close, so
+this was raised to the user rather than decided here. The user declared
+**n_primary = 4096**, on grounds independent of the nu* pattern (closest to
+real GEMM contraction dimensions in LLM inference/training; where the
+√n-decay derivation's asymptotic assumptions hold most cleanly) — logged as
+PREREGISTRATION.md sec 8.3, a dated amendment disclosing this is **post-data**
+(the sweep and Step 4.1's slope fits already existed) rather than claiming
+false pre-data cleanliness. See sec 8.3 for the full disclosure, including
+the honest statement of what residual risk this carries and what it does not
+taint.
+
+### Headline finding: GRID MIS-SPECIFICATION, not H1 confirmation or H0
+
+**The bound is broken at every one of the 8 tested nu, in every one of the 16
+families, at n_primary -- and at every other tested n as well (16, 64, 256,
+1024; the sensitivity table shows the identical 16/16-censored-above pattern
+at all five n).** This is exactly the contingency PREREGISTRATION.md sec 5.1
+names explicitly: *"All cells censored above (bound breaks even at the
+lightest-tailed nu tested, r = 8 everywhere): H1 untestable on this grid,
+because the nu range was mis-specified. Reported as such, with the finding
+that the bound fails even in the near-Gaussian regime -- a strong result in
+its own right, but labelled a grid mis-specification, not an H1
+confirmation."*
+
+**This is not H0 either**, despite the mechanical PREREGISTRATION.md sec 2.1
+conjunctive rule technically computing r(32,s) = r(16,s) = 8 for both scale
+formats (which sec 2.1's literal table would read as "no detectable
+difference"). Sec 5.1 explicitly supersedes that reading for the
+all-censored case: with the bound already broken everywhere, there is no
+headroom left in the tested nu range to observe *where* block-32 and
+block-16 diverge in fragility, so "no detectable difference" would
+misdescribe a saturated measurement as a null result. `nu*` is undefined for
+every family on this grid; H1 as formulated (sec 1: "nu*(32) > nu*(16)")
+cannot be evaluated, not because the data show no effect, but because both
+sides of the comparison are censored past the edge of what was tested.
+
+**Concrete numbers, canonical sub-configuration (round_mode=rtne, rht=False),
+at n_primary=4096:**
+
+| preset | nu=1 (heaviest) | nu=30 | nu=gaussian (lightest, near-Gaussian) |
+|---|---|---|---|
+| MXFP4 (block=32, e8m0) | ratio = 31.92 [31.85, 31.97] | ratio = 1.615 [1.613, 1.618] | ratio = 1.588 [1.585, 1.590] |
+| NVFP4 (block=16, e4m3) | ratio = 20.91 [20.85, 20.97] | ratio = 1.531 [1.528, 1.533] | ratio = 1.515 [1.513, 1.517] |
+
+(ratio = median(BE)/cota(n_primary), 95% bootstrap CI in brackets.) Even at
+the mildest tail tested -- the Gaussian limit, the regime the sqrt(n)
+derivation's assumptions fit best -- the CI sits entirely and unambiguously
+above 1.0: the `c=1` prefactor under-predicts the empirical error by roughly
+50-60% there, growing to a 20-32x under-prediction at nu=1. This is
+consistent with, and not contradicted by, Step 4.1's finding that `c_hat`
+(fitted with the empirical, not the fixed, exponent) averaged 1.51 across
+the 128 configurations: a persistently-too-small `c=1` is precisely what
+produces a ratio anchored above 1 everywhere, since the empirical decay
+exponent Step 4.1 measured is uniformly slightly less steep than -0.5 (the
+"128/128 weakening" result), so the gap this `c=1` under-prediction leaves
+does not close as `n` grows -- confirmed directly by the sensitivity table
+below, where the ratio is nearly n-invariant rather than shrinking.
+
+### Per-family results (all 16, canonical and the 3 robustness combos)
+
+**16/16 families: r=8 (censored above). 0/16 non-monotone.** Every family's
+`broken_at_nu` set is the full 8-element grid `{1, 2, 3, 5, 8, 15, 30,
+gaussian}`, so the down-set monotonicity check (PREREGISTRATION.md sec 1.1)
+is trivially satisfied everywhere (a full set is always a down-set) -- there
+is no ambiguity or inconclusive-exploratory flag to raise here, just a
+uniformly saturated grid. Full per-family table:
+`results/analysis/nu_star/nu_star_e15f13a87939_families.parquet` /
+`_families.csv`.
+
+### H1 analysis (as specified, reported for completeness -- superseded by the grid mis-specification finding above)
+
+Canonical sub-configuration (round_mode=rtne, rht=False): P1a (block effect
+@ e8m0) = r(32,e8m0) − r(16,e8m0) = 8 − 8 = 0. P1b (block effect @ e4m3) =
+8 − 8 = 0. Mechanical verdict per sec 2.1's table: "H0". P2a (scale effect @
+block16) = 0, P2b (scale effect @ block32) = 0 -- design-validity
+comparison, not a test of H1 (sec 4.1). Neither factor shows a rank
+difference because every rank is pinned at the ceiling (8); this is the
+signature of saturation, not of equal fragility. **Per the grid
+mis-specification finding above, none of these zero-effect numbers should be
+read as evidence for H0 or against H1** -- they are an artifact of both
+block sizes' nu* being off the tested grid entirely, not a measurement of
+their relative position. Robustness check: the same degenerate P1a=P1b=
+P2a=P2b=0 pattern holds at all 3 non-canonical (round_mode, rht) combos
+(rtne+rht, sr+not-rht, sr+rht) -- consistent across all 4, because the
+saturation is universal across round_mode and rht as well, not because the
+underlying comparison is informative.
+
+### Sensitivity across n (PREREGISTRATION.md sec 4.0)
+
+| n | families censored above (r=8) | families censored below (r=0) | mean r |
+|---|---|---|---|
+| 16 | 16/16 | 0/16 | 8.00 |
+| 64 | 16/16 | 0/16 | 8.00 |
+| 256 | 16/16 | 0/16 | 8.00 |
+| 1024 | 16/16 | 0/16 | 8.00 |
+| 4096 (n_primary) | 16/16 | 0/16 | 8.00 |
+
+**The all-censored-above pattern is not an n=4096 artifact -- it holds
+identically at every tested n, including the smallest (n=16).** Spot check
+(MXFP4 preset, nu=1, canonical sub-config): ratio = 3.55 at n=16, rising to
+7.18 (n=64), 12.10 (n=256), 19.62 (n=1024), 31.92 (n=4096) -- already well
+above 1.0 at the smallest tested contraction dimension, and growing roughly
+in line with the sub-(-0.5) decay exponent Step 4.1 measured. So the
+mis-specification is not a large-n phenomenon that a smaller `n_primary`
+would have avoided; the `c=1` prefactor is uncalibrated across the entire
+tested scale range.
+
+### What this does and does not mean for the project
+
+**This is a real, informative confirmatory finding, not a null result to be
+explained away.** Per PREREGISTRATION.md sec 5.1's own framing, it should be
+reported as: the empirically-calibrated `u_eff/sqrt(n)` scaling law's
+*functional form* (Step 🧠1) is well supported at nu≥15 (Step 4.1: gap from
+-0.5 negligible there), but its *leading constant*, fixed a priori at `c=1`
+per the anti-circularity constraint (PREREGISTRATION.md sec 3.2), is not
+well calibrated anywhere in the tested grid -- it under-predicts by roughly
+50% even in the best case (near-Gaussian, large n) and by over an order of
+magnitude at the heaviest tail. `c=1` was explicitly flagged as *not
+guaranteed to be well-calibrated* when 🧠1 was resolved (SPEC.md,
+"Theoretical bound definition (🧠1)"; PREREGISTRATION.md sec 3.2), and a
+poorly-calibrated `c` was named there as "a reportable finding rather than
+grounds to re-fit" -- this is that finding, now measured directly rather
+than anticipated.
+
+**H1 as formulated is untestable on this grid, in either direction.** The
+data do not support "block-32 is more fragile" (H1), "no detectable
+difference" (H0), nor a directional reversal -- all three presuppose an
+observable crossing that this grid never reaches. Extending the nu range
+toward the Gaussian side (nu > 30, e.g. much larger degrees of freedom, or
+a formal treatment distinguishing "close to Gaussian" from "exactly
+Gaussian" more finely) is the natural next step to find where, if anywhere,
+the bound holds -- not attempted here.
+
+**Does not proceed to causal decomposition (Step 4.3)** -- that step would
+decompose P1/P2/P3 effects that presuppose an observable nu*, which does
+not exist on this grid; it is not run here, per the task that produced this
+section.

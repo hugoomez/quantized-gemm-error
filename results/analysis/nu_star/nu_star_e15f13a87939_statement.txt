@@ -1,0 +1,62 @@
+Step 4.2 nu* localization (PRIMARY RESULT), n_primary=4096. 16 families (block_size x scale_format x round_mode x rht) x 8 nu.
+
+Censored below (bound never breaks, r=0): 0/16
+Censored above (bound breaks at every tested nu, r=8): 16/16
+Non-monotone (flagged inconclusive-exploratory per sec 1.1): 0/16
+
+Per-family fragility rank and nu* interval:
+  block=16 scale=e4m3 round=rtne rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e4m3 round=rtne rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e8m0 round=rtne rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e8m0 round=rtne rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e4m3 round=rtne rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e4m3 round=rtne rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e8m0 round=rtne rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e8m0 round=rtne rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e4m3 round=sr rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e4m3 round=sr rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e8m0 round=sr rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e8m0 round=sr rht=False: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e4m3 round=sr rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e4m3 round=sr rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=16 scale=e8m0 round=sr rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+  block=32 scale=e8m0 round=sr rht= True: r=8 nu* = (∞, ∞)  broken at nu in {1,2,3,5,8,15,30,gaussian}  [censored_above (bound breaks at every tested nu)]
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+GRID MIS-SPECIFICATION (PREREGISTRATION.md sec 5.1): the bound breaks at EVERY tested nu, in EVERY one of the 16 families, at n_primary. This means H1 IS UNTESTABLE ON THIS GRID -- not H0, and not an H1 confirmation. The P1/P2 rank comparisons below are still computed (every r=8, so they mechanically read as 'H0: no detectable difference'), but sec 5.1 explicitly supersedes that reading here: there is no headroom left in the tested nu range to observe *where* fragility differs between block sizes or scale formats, because the bound has already failed even in the near-Gaussian limit. Reported per sec 5.1's own words: 'a strong result in its own right' -- the c=1 prefactor is not calibrated at n_primary -- 'labelled a grid mis-specification, not an H1 confirmation.'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+========================================================================
+H1 ANALYSIS -- canonical sub-configuration (round_mode=rtne, rht=False)
+========================================================================
+(The verdict computed below is the MECHANICAL P1/P2 rank comparison per sec 2.1's literal table. Per the grid mis-specification banner above, it is NOT the informative reading of this data -- read that banner first.)
+r(block=32, e8m0) = 8   r(block=16, e8m0) = 8   P1a (block effect @ e8m0) = +0
+r(block=32, e4m3) = 8   r(block=16, e4m3) = 8   P1b (block effect @ e4m3) = +0
+P1 VERDICT (sole confirmatory test of H1): H0 (no detectable block-size effect at either scale format)
+
+P2a (scale effect @ block16, e4m3 - e8m0) = +0   P2b (scale effect @ block32, e4m3 - e8m0) = +0   (design-validity only, NOT a test of H1 -- sec 4.1)
+Mean |effect| in fragility-rank steps: P1 (block size) = 0.00, P2 (scale format) = 0.00. LARGER EFFECT ON nu*: NEITHER (P1 and P2 have equal magnitude).
+INTERACTION: block size's effect on nu* does NOT depend on scale format (P1a=+0 vs P1b=+0); scale format's effect on nu* does NOT depend on block size (P2a=+0 vs P2b=+0).
+
+========================================================================
+ROBUSTNESS -- same P1/P2 comparisons at the other 3 (round_mode, rht) combos
+(exploratory: neither round_mode nor rht is part of the primary 2x2 design)
+========================================================================
+  round_mode=rtne rht=True : P1a=+0 P1b=+0 P2a=+0 P2b=+0  verdict=H0 (no detectable block-size effect at either scale format)  larger effect: NEITHER
+  round_mode=sr   rht=False: P1a=+0 P1b=+0 P2a=+0 P2b=+0  verdict=H0 (no detectable block-size effect at either scale format)  larger effect: NEITHER
+  round_mode=sr   rht=True : P1a=+0 P1b=+0 P2a=+0 P2b=+0  verdict=H0 (no detectable block-size effect at either scale format)  larger effect: NEITHER
+
+Conclusion ('NEITHER' has the larger effect on nu*) holds across all 4 round_mode x rht combinations: True. Per-combination verdicts: ['NEITHER', 'NEITHER', 'NEITHER', 'NEITHER'].
+
+========================================================================
+SENSITIVITY (PREREGISTRATION.md sec 4.0): r(family) at every n in the grid, disclosed but never substituted for n_primary in the verdict above.
+========================================================================
+  n=   16: censored-above (r=8) 16/16, censored-below (r=0)  0/16, mean r = 8.00
+  n=   64: censored-above (r=8) 16/16, censored-below (r=0)  0/16, mean r = 8.00
+  n=  256: censored-above (r=8) 16/16, censored-below (r=0)  0/16, mean r = 8.00
+  n= 1024: censored-above (r=8) 16/16, censored-below (r=0)  0/16, mean r = 8.00
+  n= 4096: censored-above (r=8) 16/16, censored-below (r=0)  0/16, mean r = 8.00  <-- n_primary
+
+Whether n_primary's all-broken pattern is n=4096-specific or holds at every tested n is read directly off the table above: if smaller n show fewer censored-above families, the gap between empirical error and cota(n) is growing with n (consistent with Step 4.1's finding that the empirical decay slope is uniformly less steep than the -0.5 the c=1 prefactor assumes, so the unresolved gap compounds as n grows); if every n is equally saturated, the miscalibration is present at every tested scale, not an n=4096 artifact.
+
+This script fits and reports Step 4.2 only; it does not perform the causal decomposition (Step 4.3, a separate step not run here).

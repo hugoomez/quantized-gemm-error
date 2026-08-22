@@ -343,6 +343,7 @@ version and any later state is diffable against it.
 |---|---|---|---|---|
 | 2026-08-20 | §3, §3.1 | 🧠1 resolved: the provisional `bound(n) = c · √n · u_eff` is superseded by `cota(n, format, block, ν) = c · u_eff(format, block, ν) / √n` — a **decaying** form, not a growing one | The primary route accumulates in exact fp64, so the repeated-rounding mechanism that gives γ_n and √n·u their n-dependence is not physically present. The surviving mechanism is partial cancellation of one-time input-quantization errors, which makes `BE` decay as n^(-1/2). Measured: slopes −0.4978 (block 16) / −0.4966 (block 32) at ν = 30. | **Pre-data** |
 | 2026-08-22 | §3, §3.2 | Robust-statistics methodology resolved (Step 3.4): median and p90 carry all confirmatory statistical weight (ν* localization included); p99 is reported for every cell but is INDICATIVE ONLY, at any trial count, never the basis of a firm claim | Empirical 95%-CI coverage simulation (t-Student ν=2, 1000 experiments/cell): median coverage 95.5% (n_trials=1000) / 94.8% (n_trials=5000), close to nominal; p99 coverage 92.7% (n_trials=1000) / 94.0% (n_trials=5000), measurably below the median's and below nominal at n_trials=1000, narrower but still short at n_trials=5000 — a percentile bootstrap cannot invent values past the sample's own extreme tail. | **Pre-data** |
+| 2026-08-22 | §4.0, §7 item 2 | **`n_primary` declared: 4096** (the largest tested contraction dimension, `configs/sweep_main.yaml`'s `main_grid.n` upper end) | Author's choice, on grounds stated independently of any ν*/H1 outcome: n=4096 is closest to real GEMM contraction dimensions in LLM inference/training (the most externally relevant regime), and is where the √n-decay derivation's asymptotic assumptions (Step 🧠1, cancellation over many roughly-independent blocks) are most likely to hold cleanly. See 8.3 for the full disclosure, including timing. | **Post-data (disclosed, see 8.3)** |
 
 ### 8.1 — 2026-08-20: 🧠1 resolved, bound functional form only
 
@@ -452,6 +453,59 @@ contract implement; this amendment adds a p90/p99 handling policy on top of
 it, not a replacement for it. The coverage simulation itself used
 `n_resamples=1000` for computational tractability (disclosed in SPEC.md), not
 because the confirmatory default changed.
+
+### 8.3 — 2026-08-22: n_primary declared (§7 item 2 closed)
+
+**What changed.** §4.0 designates a single `n_primary` for the ν* verdict and
+left its *value* ⚠ OPEN, to be declared here before the first confirmatory
+run computing ν*. That value is now **n_primary = 4096**, the largest `n` in
+the frozen main grid (`configs/sweep_main.yaml`, `main_grid.n = [16, 64,
+256, 1024, 4096]`). All other four `n` values remain robustness checks per
+§4.0, reported in a disclosed sensitivity table alongside the primary
+result, never substituted for it in the H1 verdict.
+
+**Why 4096.** Stated by the author, on grounds independent of the ν*
+pattern at any `n`: it is the contraction dimension closest to real GEMM
+shapes in LLM inference/training, making it the most externally relevant
+regime to report as primary; and it is the `n` at which the √n-decay
+derivation's asymptotic assumptions (Step 🧠1 — cancellation over
+`n/block_size` roughly-independent blocks) are most likely to hold cleanly,
+since the assumption improves as the block count grows.
+
+**Timing — POST-DATA, disclosed rather than hidden.** Unlike the two
+amendments above, this one is **not** pre-data, and it would be dishonest to
+label it so. Verified against the repository at the time of writing: the
+confirmatory sweep (`sweep_e945b87a2395`) had already completed
+(2026-08-21) and Step 4.1's n-scaling slope fits — which regress across all
+five `n` values, `4096` included, for all 128 sub-configurations — were
+already computed and committed (commit `41d6c79`,
+`results/analysis/n_scaling_fits/`) before this declaration. So the author
+was not blind to how `median(BE)` behaves at `n=4096` when choosing it.
+
+**What this does and does not taint.** Step 4.1 reports a *slope* — how
+`median(BE)` scales with `n` — not the *ratio* `median(BE)/cota(n)` at any
+single `n`, and not any break/no-break outcome: no bootstrap CI of that
+ratio, at `n=4096` or any other `n`, existed anywhere in this repository
+before this amendment (verified: no script under `scripts/` reads
+`results/sweep_e945b87a2395*` to compute a ratio against `cota`, and
+`qgemm.stats.bootstrap_ci` is imported nowhere outside `tests/` and
+`scripts/fit_n_scaling.py`, whose output is the slope table, not a ratio).
+The specific quantity §3's break criterion is evaluated on was therefore
+unseen at declaration time. What *was* seen is the closely related slope
+pattern (Step 4.1: gap from -0.5 negligible at ν≥15, material at ν≤3,
+uniform across all five `n` including 4096) — which is suggestive of, but
+not identical to, whether the ratio's CI at n=4096 specifically clears 1.0
+at any given ν. The honest position is that this declaration carries
+residual risk of being informed by that adjacent pattern, is disclosed as
+such rather than claimed clean, and is the author's call exactly as §7
+reserves it to be — not a reviewer- or tool-driven pick made to produce a
+particular ν* outcome.
+
+**Scope.** This closes §7 item 2 only. Items 1 (the ν grid), 3 (the primary
+error metric), and 4 (trial counts) remain formally unclosed by a dated
+amendment, though each is de facto fixed by the frozen `sweep_main.yaml`
+grid and by `be_median`'s established use throughout Step 3.3/3.4/4.1 as the
+empirical-error quantity. Closing those formally is not done here.
 
 ## 9. Adversarial Review Notes (2026-08-19)
 

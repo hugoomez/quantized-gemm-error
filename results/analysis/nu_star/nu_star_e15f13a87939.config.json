@@ -1,0 +1,11 @@
+{
+  "canonical_rht": false,
+  "canonical_round_mode": "rtne",
+  "ci": 0.95,
+  "n_primary": 4096,
+  "n_resamples": 10000,
+  "script": "localize_nu_star.py",
+  "seed": 0,
+  "sweep_dir": "C:\\Users\\gomez\\quantized-gemm-error\\results\\sweep_e945b87a2395",
+  "version": 1
+}

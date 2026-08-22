@@ -77,6 +77,86 @@ def bootstrap_ci(
     return point_estimate, float(ci_low), float(ci_high)
 
 
+def _loglog_slope(x_values: np.ndarray, y_values: np.ndarray) -> tuple[float, float]:
+    """Closed-form least-squares slope/intercept of `log10(y)` vs `log10(x)`."""
+    x = np.log10(np.asarray(x_values, dtype=np.float64))
+    y = np.log10(np.asarray(y_values, dtype=np.float64))
+    x_centered = x - x.mean()
+    slope = float(np.sum(x_centered * (y - y.mean())) / np.sum(x_centered**2))
+    intercept = float(y.mean() - slope * x.mean())
+    return slope, intercept
+
+
+def bootstrap_loglog_slope_ci(
+    y_by_x: dict[float, np.ndarray],
+    rng: np.random.Generator,
+    n_resamples: int = 2000,
+    ci: float = 0.95,
+) -> tuple[float, float, float, float]:
+    """Bootstrap CI for the log-log slope of `median(y)` vs `x`, across several x's.
+
+    A generalization of `bootstrap_ci` for a statistic -- a fitted slope --
+    that spans several independent samples of unequal size at once (one per
+    distinct `x`, e.g. the 5 `n` values a cell's trials are grouped under).
+    `bootstrap_ci`'s single-array API cannot express this: its resampling
+    draws indices from one flat array of size `data.size`, so it has no way
+    to resample several groups independently *within one replicate* -- which
+    is exactly what fitting one slope per bootstrap replicate needs. This
+    function uses the same resampling primitive (`rng.integers` with
+    replacement, percentile CI on the replicate distribution) applied once
+    per `x` group instead.
+
+    The resampling unit is whatever population `y_by_x[x]` holds one row per
+    -- the trial, per this project's fixed convention (PREREGISTRATION.md
+    sec 3.2): elements within a trial are not independent, so only a
+    trial-level resample is honest.
+
+    Parameters
+    ----------
+    y_by_x : dict[float, np.ndarray]
+        Maps each `x` to its raw (trial-level) `y` samples. At least two `x`
+        values are required to fit a slope.
+    rng : numpy.random.Generator
+        Explicit, never global.
+    n_resamples : int
+        Bootstrap replicate count.
+    ci : float
+        Central CI width, e.g. 0.95.
+
+    Returns
+    -------
+    (slope, intercept, ci_low, ci_high)
+        `slope`/`intercept` are the point estimate from the un-resampled data
+        (ordinary least squares of `log10(median(y))` vs `log10(x)`, one
+        point per `x`); `ci_low`/`ci_high` bound the percentile bootstrap CI
+        of the slope alone.
+    """
+    if len(y_by_x) < 2:
+        raise ValueError("need at least two x values to fit a slope")
+
+    xs = np.array(sorted(y_by_x), dtype=np.float64)
+    point_medians = np.array([float(np.median(y_by_x[x])) for x in sorted(y_by_x)])
+    slope, intercept = _loglog_slope(xs, point_medians)
+
+    log_x = np.log10(xs)
+    log_x_centered = log_x - log_x.mean()
+    denom = float(np.sum(log_x_centered**2))
+
+    boot_medians = np.empty((n_resamples, xs.size), dtype=np.float64)
+    for col, x in enumerate(sorted(y_by_x)):
+        y = np.asarray(y_by_x[x], dtype=np.float64)
+        idx = rng.integers(0, y.size, size=(n_resamples, y.size))
+        boot_medians[:, col] = np.median(y[idx], axis=1)
+
+    log_y = np.log10(boot_medians)
+    log_y_centered = log_y - log_y.mean(axis=1, keepdims=True)
+    slope_reps = (log_x_centered[None, :] * log_y_centered).sum(axis=1) / denom
+
+    alpha = (1.0 - ci) / 2.0
+    ci_low, ci_high = np.percentile(slope_reps, [100.0 * alpha, 100.0 * (1.0 - alpha)])
+    return slope, intercept, float(ci_low), float(ci_high)
+
+
 def summarize_cell(
     be_values: np.ndarray, rng: np.random.Generator, n_resamples: int = 10000
 ) -> dict:

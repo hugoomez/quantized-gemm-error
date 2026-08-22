@@ -2777,3 +2777,117 @@ below some threshold -- the policy set out in the Decision above.
 To reproduce: `pytest tests/test_stats.py -k coverage -s` (about 10-11
 minutes; the four numbers above are read directly off its printed output,
 which the test also prints for exactly this reason).
+
+## Step 4.1 -- n-scaling fits
+
+**Status: measured, confirmatory.** Fits the empirical log-log slope of
+`median(BE)` vs `n` for every one of the 128 configurations in the frozen
+production sweep (`nu` x `block_size` x `scale_format` x `round_mode` x
+`rht`, 8x2x2x2x2, each regressed across its 5 `n` values), and compares each
+against the theoretical `-0.5` exponent from "Theoretical bound definition
+(🧠1) -- RESOLVED" above. Produced by `scripts/fit_n_scaling.py`, which adds
+`qgemm.stats.bootstrap_loglog_slope_ci` -- a generalization of `bootstrap_ci`
+for a statistic (a fitted slope) spanning several independently-resampled
+groups of unequal size, which `bootstrap_ci`'s single-array API cannot
+express on its own; see that function's docstring for why. Output under
+`results/analysis/n_scaling_fits/n_scaling_fits_5d2c4b01328a*` (table,
+detail table, config, statement), kept under `results/analysis/` rather than
+`results/diagnostics/` since this is confirmatory analysis of the production
+sweep, not a diagnostic probe. To reproduce:
+`python scripts/fit_n_scaling.py` (about 1 minute; 2000 bootstrap resamples
+per configuration, each trial resampled within its own `n`, deterministically
+seeded per configuration).
+
+### Method, briefly
+
+Per configuration: `median(BE)` at each `n` is the median, over trials, of
+each trial's own `be_median` (the trial-level column the sweep already
+stores) -- the same "median of medians" convention
+`scripts/probe_n_scaling.py` established. The log-log slope is fit by
+ordinary least squares over the 5 `(log n, log median(BE))` points. Its 95%
+CI comes from `bootstrap_loglog_slope_ci`: 2000 replicates, each resampling
+every `n`'s trials independently (with replacement, matching that `n`'s own
+trial count), recomputing the 5 medians, and refitting the slope. The
+multiplicative constant `c_hat` solves `median(BE) = c_hat * n^p_hat *
+u_eff`, `p_hat` fixed at the already-fitted empirical slope and `u_eff`
+taken directly from the sweep's own per-cell `u_eff_p50` column (no
+recomputation) -- **`c_hat` is DESCRIPTIVE/EXPLORATORY ONLY
+(PREREGISTRATION.md sec 3.2) and is never substituted for the confirmatory
+bound's constant, which stays fixed at `c=1` everywhere else in this
+project**; the script restates this at the point `c_hat` is computed
+(`fit_c_hat`'s docstring), not only here.
+
+### Results
+
+**0 of 128 configurations have a slope CI containing -0.5; 128 of 128 fall
+in the "weakening" bucket (CI entirely above -0.5, i.e. less negative --
+decaying slower than the cancellation regime predicts); 0 decay faster than
+predicted; 0 show a positive slope** (error growing with `n`, which would
+have been flagged explicitly as a striking result given exact accumulation
+-- none did).
+
+**This "128/128" headline needs the magnitude alongside it, or it overstates
+the finding.** The break criterion (CI excludes -0.5) is a statistical
+significance test, and at this sweep's trial counts (1000-5000 per cell) it
+has enough power to detect very small deviations -- so it fires even where
+the empirical slope is a few thousandths from -0.5. Splitting by magnitude
+(`|slope - (-0.5)| > 0.02`, the same threshold `probe_n_scaling.py`'s
+`SLOPE_MATCH_TOL` already uses for exactly this distinction): **63 of 128
+configurations deviate materially, 65 do not.** The gap shrinks smoothly and
+monotonically with `nu` (min/max across the 16 configurations at each `nu`):
+
+| `nu` | gap min | gap max |
+|---|---|---|
+| 1 | 0.361 | 0.490 |
+| 2 | 0.117 | 0.178 |
+| 3 | 0.041 | 0.085 |
+| 5 | 0.013 | 0.037 |
+| 8 | 0.007 | 0.024 |
+| 15 | 0.006 | 0.020 |
+| 30 | 0.005 | 0.019 |
+| gaussian | 0.004 | 0.018 |
+
+**`nu` in `{1, 2, 3}` is unambiguously material at every configuration** (gap
+0.04-0.49, an order of magnitude or more beyond the 0.02 threshold): the
+empirical slope is nowhere near the -0.5 cancellation regime here, most
+extremely at `nu=1` where slopes range from -0.010 to -0.139 -- one to two
+orders of magnitude shallower than predicted, not a borderline case. This
+matches the mechanism SPEC.md's bound-definition section already names: at
+`nu=1` the derivation's CLT/LLN assumptions (mean-zero numerator,
+law-of-large-numbers denominator) do not hold, since Cauchy has neither a
+finite mean nor variance.
+
+**`nu` in `{5, 8}` straddles the threshold** (some of their 16 configurations
+land above 0.02, some below -- visible in the table above and in the full
+per-configuration list in the statement file), consistent with a smooth
+transition rather than a sharp cutoff. **`nu` in `{15, 30, gaussian}` is
+never material** (gap 0.004-0.020 at every configuration): the empirical
+slope sits within two hundredths of -0.5 everywhere in this range, i.e. the
+u_eff/√n cancellation regime's *magnitude* is well supported here even
+though the CI is tight enough to exclude -0.5 exactly. This sharpens, and is
+consistent with, the earlier n-scaling probe's own finding at `nu=30`
+(slopes ≈ -0.4978/-0.4966, Step 2.3 groundwork): the production sweep's
+larger trial counts (1000-5000 vs. the probe's 500) narrow the CI further
+but do not move the point estimate outside the probe's own range.
+
+**c_hat (exploratory only) ranges from 0.81 to 1.87 across the 128
+configurations, mean 1.51** -- order-1 and therefore not wildly
+uninformative about the derivation's leading-order constant, but not tightly
+clustered around `c=1` either, consistent with SPEC.md's own caveat that the
+derivation is an order-of-magnitude (CLT/LLN) argument rather than a proven
+tight inequality and `c=1` is "not guaranteed to be well-calibrated."
+**Restated: these values are descriptive only and must not be read as
+evidence for changing the confirmatory bound's `c` away from 1.**
+
+### What this does not settle
+
+This script fits and reports; it does not perform ν\* localization (Step
+4.2, a separate step not run here) and does not itself decide whether the
+bound is "broken" anywhere -- that judgment, per the break criterion in
+"Theoretical bound definition (🧠1)," is about the ratio
+`empirical_BE / cota(n)`, which Step 4.2 computes directly rather than being
+inferred from the slope fits alone. The `nu` in `{5, 8}` straddle is
+reported as observed, not resolved into a single verdict for those `nu`
+values -- see the per-configuration table for which specific
+`(block_size, scale_format, round_mode, rht)` combinations land on which
+side.

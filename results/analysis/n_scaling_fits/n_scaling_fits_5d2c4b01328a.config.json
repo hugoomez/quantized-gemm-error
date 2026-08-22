@@ -1,0 +1,9 @@
+{
+  "ci": 0.95,
+  "n_resamples": 2000,
+  "script": "fit_n_scaling.py",
+  "seed": 0,
+  "sweep_dir": "C:\\Users\\gomez\\quantized-gemm-error\\results\\sweep_e945b87a2395",
+  "theoretical_slope": -0.5,
+  "version": 1
+}

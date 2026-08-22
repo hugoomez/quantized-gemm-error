@@ -4,7 +4,13 @@ import numpy as np
 import pytest
 from scipy.stats import t as t_dist
 
-from qgemm.stats import bootstrap_ci, mean_ci95, median_absolute_deviation, summarize_cell
+from qgemm.stats import (
+    bootstrap_ci,
+    bootstrap_loglog_slope_ci,
+    mean_ci95,
+    median_absolute_deviation,
+    summarize_cell,
+)
 
 
 def test_mean_ci95_zero_variance():
@@ -111,6 +117,60 @@ def test_bootstrap_ci_does_not_touch_numpy_global_rng_state():
 # --------------------------------------------------------------------------
 # summarize_cell (Step 3.4, Part A)
 # --------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------
+# bootstrap_loglog_slope_ci (Step 4.1)
+# --------------------------------------------------------------------------
+
+
+def test_bootstrap_loglog_slope_ci_recovers_a_known_power_law():
+    # y = 2 * x^-0.5 exactly (no noise): the point-estimate slope must land
+    # on -0.5 and the CI must be a tight point around it.
+    rng = np.random.default_rng(0)
+    y_by_x = {
+        float(n): np.full(2000, 2.0 * n**-0.5) for n in (16, 64, 256, 1024, 4096)
+    }
+    slope, intercept, lo, hi = bootstrap_loglog_slope_ci(y_by_x, rng, n_resamples=500)
+    assert slope == pytest.approx(-0.5, abs=1e-9)
+    assert 10.0**intercept == pytest.approx(2.0, abs=1e-9)
+    assert lo == pytest.approx(-0.5, abs=1e-9)
+    assert hi == pytest.approx(-0.5, abs=1e-9)
+
+
+def test_bootstrap_loglog_slope_ci_brackets_the_point_estimate():
+    rng = np.random.default_rng(1)
+    y_by_x = {
+        float(n): rng.standard_t(3, size=300) ** 2 + 5.0 / np.sqrt(n)
+        for n in (16, 64, 256, 1024, 4096)
+    }
+    slope, _intercept, lo, hi = bootstrap_loglog_slope_ci(y_by_x, rng, n_resamples=1000)
+    assert lo <= slope <= hi
+
+
+def test_bootstrap_loglog_slope_ci_requires_at_least_two_x_values():
+    rng = np.random.default_rng(0)
+    with pytest.raises(ValueError):
+        bootstrap_loglog_slope_ci({1.0: np.ones(10)}, rng, n_resamples=100)
+
+
+def test_bootstrap_loglog_slope_ci_is_reproducible_for_a_given_generator_seed():
+    y_by_x = {
+        float(n): np.random.default_rng(0).standard_normal(50) + 10.0 for n in (16, 64, 256)
+    }
+    a = bootstrap_loglog_slope_ci(y_by_x, np.random.default_rng(7), n_resamples=300)
+    b = bootstrap_loglog_slope_ci(y_by_x, np.random.default_rng(7), n_resamples=300)
+    assert a == b
+
+
+def test_bootstrap_loglog_slope_ci_does_not_touch_numpy_global_rng_state():
+    y_by_x = {
+        float(n): np.random.default_rng(0).standard_normal(50) + 10.0 for n in (16, 64, 256)
+    }
+    before = np.random.get_state()
+    bootstrap_loglog_slope_ci(y_by_x, np.random.default_rng(11), n_resamples=300)
+    after = np.random.get_state()
+    assert np.array_equal(before[1], after[1])
 
 
 def test_summarize_cell_returns_the_expected_keys():

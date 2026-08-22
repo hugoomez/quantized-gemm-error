@@ -342,6 +342,7 @@ version and any later state is diffable against it.
 | Date | Section | Change | Justification | Pre- or post-data |
 |---|---|---|---|---|
 | 2026-08-20 | §3, §3.1 | 🧠1 resolved: the provisional `bound(n) = c · √n · u_eff` is superseded by `cota(n, format, block, ν) = c · u_eff(format, block, ν) / √n` — a **decaying** form, not a growing one | The primary route accumulates in exact fp64, so the repeated-rounding mechanism that gives γ_n and √n·u their n-dependence is not physically present. The surviving mechanism is partial cancellation of one-time input-quantization errors, which makes `BE` decay as n^(-1/2). Measured: slopes −0.4978 (block 16) / −0.4966 (block 32) at ν = 30. | **Pre-data** |
+| 2026-08-22 | §3, §3.2 | Robust-statistics methodology resolved (Step 3.4): median and p90 carry all confirmatory statistical weight (ν* localization included); p99 is reported for every cell but is INDICATIVE ONLY, at any trial count, never the basis of a firm claim | Empirical 95%-CI coverage simulation (t-Student ν=2, 1000 experiments/cell): median coverage 95.5% (n_trials=1000) / 94.8% (n_trials=5000), close to nominal; p99 coverage 92.7% (n_trials=1000) / 94.0% (n_trials=5000), measurably below the median's and below nominal at n_trials=1000, narrower but still short at n_trials=5000 — a percentile bootstrap cannot invent values past the sample's own extreme tail. | **Pre-data** |
 
 ### 8.1 — 2026-08-20: 🧠1 resolved, bound functional form only
 
@@ -394,6 +395,63 @@ bound retains the ν-indexed `u_eff`, so R6 applies to it exactly as it applied
 to the provisional form. This amendment closes the **functional-form** question
 (🧠1) and nothing else; it makes no claim about R6, and §3.1 item 3's required
 wording about what H1 does and does not test continues to apply unchanged.
+
+### 8.2 — 2026-08-22: robust statistics methodology resolved (Step 3.4)
+
+**What changed.** §3's provisional `u_eff` definition already named p99 as
+"an indicative secondary statistic" alongside the median, but left the
+handling of p99 informal and did not say whether trial count changes that
+status, and §3.2 (R8) specified the median bootstrap's method and resampling
+unit without addressing p99 or p90 at all. This amendment makes the policy
+explicit and general, and adds p90 as a second confirmatory statistic:
+**median and p90 carry all confirmatory statistical weight in this project,
+including ν* localization; p99 is reported for every cell, always, but is
+INDICATIVE ONLY and is never the basis of a firm claim, regardless of
+whether a cell ran 1000 or 5000 trials.**
+
+**Why -- grounded in measured coverage, not just the a priori mechanism.** A
+cell's p99 is set by roughly its most extreme 1% of sample values (10 of
+1000 trials, 50 of 5000), and a percentile bootstrap resamples *with
+replacement from the observed sample itself*, so it can reweight those
+values but can never invent one more extreme than the largest already drawn
+-- a structural reason to expect p99's bootstrap CI to undercover relative to
+a central statistic like the median. This was checked empirically, not
+assumed: a coverage simulation (t-Student ν=2, 1000 experiments per cell, at
+both `n_trials=1000` and `n_trials=5000`) found median coverage close to
+nominal 95% at both trial counts (95.5%, 94.8%) and p99 coverage measurably
+below both the median's and nominal at `n_trials=1000` (92.7%), narrowing but
+still short at `n_trials=5000` (94.0%). The gap is real and directionally as
+expected, but reported at its actual, modest size rather than a more dramatic
+one the a priori mechanism alone might suggest. Full numbers, methodology and
+discussion: SPEC.md, "Robust statistics methodology (Step 3.4) — RESOLVED".
+
+**What landed in code.** `qgemm.stats.bootstrap_ci` (percentile bootstrap CI
+of an arbitrary statistic, explicit `Generator`, interval reported as-is
+rather than forced symmetric) and `qgemm.stats.summarize_cell` (median, p90,
+p99, MAD of a cell's `BE` values, each with a `bootstrap_ci`, p99's entry
+additionally tagged `p99_ci_indicative_only: True`). Tests in
+`tests/test_stats.py`, including the coverage simulation above.
+
+**Timing -- pre-data, verified.** This amendment was written, and the
+statistics it is grounded in were implemented and tested, **before** any
+aggregation or quantile analysis of the production sweep
+(`sweep_e945b87a2395`, SPEC.md "Production run provenance") has been
+performed. Verified against the repository at the time of writing: no script
+under `scripts/` reads `results/sweep_e945b87a2395*` for any aggregation or
+quantile purpose, and neither `bootstrap_ci` nor `summarize_cell` -- both new
+in this step -- is imported anywhere outside `tests/test_stats.py`. The
+sweep's own parquet file and manifest exist (the run itself already
+happened, per the 2026-08-21 provenance entry), but nothing has yet computed
+a median, p90, p99, or CI from its contents.
+
+**R8 is not superseded by this amendment.** §3.2's bootstrap specification
+(percentile method, B = 10 000, explicit Generator seeding, the independent
+trial as the resampling unit) stands unchanged and is exactly what
+`bootstrap_ci`'s default `n_resamples=10000` and its `data`-as-trials
+contract implement; this amendment adds a p90/p99 handling policy on top of
+it, not a replacement for it. The coverage simulation itself used
+`n_resamples=1000` for computational tractability (disclosed in SPEC.md), not
+because the confirmatory default changed.
 
 ## 9. Adversarial Review Notes (2026-08-19)
 

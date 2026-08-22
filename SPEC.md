@@ -2663,3 +2663,117 @@ thermal limits up front (e.g. an elevated stand for airflow, or a lower
 `--jobs` count sustained over many hours) -- though `--resume` is exactly
 why this particular interruption was a non-issue for the data itself,
 just an avoidable delay.
+
+## Robust statistics methodology (Step 3.4) — RESOLVED
+
+**Decision.** Median and p90 carry all confirmatory statistical weight in
+this project, including ν* localization. **p99 is reported for every cell,
+always, but is INDICATIVE ONLY and is never the basis of a firm claim** --
+regardless of whether the cell ran 1000 or 5000 trials. This lands before
+any confirmatory analysis of the production sweep (`sweep_e945b87a2395`,
+see "Production run provenance" above) has been performed: no aggregation or
+quantile analysis of that sweep's data exists anywhere in this repository as
+of this section being written (verified directly -- `scripts/` contains no
+analysis script that reads `results/sweep_e945b87a2395*`, and no such script
+imports `bootstrap_ci` or `summarize_cell`, both of which are new in this
+step).
+
+**Why.** A cell's p99 is set by roughly its top 1% of sample values -- 10 of
+1000 trials, 50 of 5000. Percentile-bootstrap resampling draws *with
+replacement from the observed sample itself*, so it can reweight those
+extreme values but can never invent a value more extreme than the largest one
+already drawn. An extreme-order statistic like p99 is therefore structurally
+harder for this method to bracket correctly than a central one like the
+median or p90, independent of how many trials a cell happened to run. This is
+stated as the mechanism, not just the a priori claim; see the measured
+coverage gap below for the empirical check.
+
+**What landed in code.**
+
+* `qgemm.stats.bootstrap_ci(data, statistic_fn, rng, n_resamples=10000, ci=0.95) -> (point_estimate, ci_low, ci_high)`
+  -- percentile bootstrap: resamples `data` with replacement `n_resamples`
+  times, recomputes `statistic_fn` on each resample, and takes the 2.5th/97.5th
+  percentiles of the resulting distribution as `ci_low`/`ci_high`. The interval
+  is reported as-is, never assumed or forced symmetric around the point
+  estimate (pinned by
+  `test_bootstrap_ci_interval_need_not_be_symmetric`). Takes an explicit
+  `numpy.random.Generator`, per this project's fixed convention -- never
+  NumPy's global RNG state (pinned by
+  `test_bootstrap_ci_does_not_touch_numpy_global_rng_state`). `statistic_fn`
+  is called once on the raw 1-D data for the point estimate and once on the
+  full `(n_resamples, n)` resample matrix with `axis=1` for the bootstrap
+  distribution -- `np.median`, `functools.partial(np.percentile, q=...)`, and
+  `median_absolute_deviation` (see below) all satisfy that signature -- which
+  is what makes the whole resampling pass one vectorized NumPy call instead of
+  a `n_resamples`-iteration Python loop; at the resample counts the coverage
+  check below needs, that is the difference between minutes and roughly an
+  hour.
+* `qgemm.stats.summarize_cell(be_values, rng, n_resamples=10000) -> dict` --
+  median, p90, p99, and MAD of `be_values`, each as
+  `{stat}`/`{stat}_ci_low`/`{stat}_ci_high` via `bootstrap_ci`. The p99 entry
+  additionally carries `p99_ci_indicative_only: True`, always, so the
+  indicative-only status is visible in the data itself and not just in this
+  document.
+* `qgemm.stats.median_absolute_deviation` gained an optional keyword-only
+  `axis` parameter (default `None`, identical behavior to before) so it can
+  serve as a `statistic_fn` in `bootstrap_ci`'s vectorized resampling pass;
+  `summarize_cell` uses it to give MAD a bootstrap CI alongside the other
+  three statistics.
+* Tests in `tests/test_stats.py`: a known-answer case for `bootstrap_ci` on
+  constant data (every resample gives the same statistic, so the CI must
+  collapse to a point), the `ci_low <= point_estimate <= ci_high` bracket
+  property across several statistic/distribution combinations, RNG-discipline
+  tests (reproducible for a fixed seed, does not touch NumPy's global RNG
+  state), and the coverage simulation below.
+
+### Coverage simulation -- the empirical justification, not just the a priori claim
+
+`test_bootstrap_ci_coverage_for_median_and_p99_under_heavy_tails` in
+`tests/test_stats.py` measures 95%-CI coverage directly rather than assuming
+it: 1000 simulated experiments, each drawing `n_trials` samples from
+t-Student(ν=2) -- heavy enough to be a real stress test, light enough to have
+finite variance -- at both of this project's adaptive trial budgets
+(`n_trials=1000` for light-tail cells, `n_trials=5000` for heavy-tail cells).
+Each experiment computes a 95% bootstrap CI of the sample median and of the
+sample p99, and checks whether the true population median (`0`, by symmetry)
+and the true population p99 (`scipy.stats.t.ppf(0.99, df=2)`, exact) fall
+inside their respective intervals. The bootstrap itself uses `n_resamples =
+1000`, not `bootstrap_ci`'s own default of 10000 -- at `n_trials=5000` the
+full default would put this one test on the order of an hour; 1000 resamples
+still stabilizes a percentile-bootstrap CI adequately for a coverage check
+(the recommended range for CI estimation, as opposed to precise tail-quantile
+work) and is disclosed in the test rather than silently substituted.
+
+**Measured coverage (1000 simulated experiments per cell, nominal target 95%):**
+
+| n_trials | median coverage | p99 coverage |
+|---|---|---|
+| 1000 | 95.5% | 92.7% |
+| 5000 | 94.8% | 94.0% |
+
+**Median coverage sits close to the nominal 95% at both trial counts**
+(95.5%, 94.8%), well inside the `[90%, 99%]` tolerance band `1000` simulated
+experiments' own sampling noise warrants (asserted in the test as the
+concrete acceptance criterion) -- the median is estimable stably enough to
+bootstrap at either trial budget this project actually uses.
+
+**p99 coverage is measurably below both the median's coverage and the
+nominal 95% target at `n_trials=1000`** (92.7% vs. 95.5%/95%, roughly 3.5
+simulated-experiment standard errors low, `sqrt(0.93*0.07/1000) ~= 0.8pp`) --
+consistent with the a priori mechanism above and the reason p99 is policy-set
+to indicative-only. **Reported plainly, not forced into a more dramatic
+shape than measured: the gap is real but modest, not a collapse, and at
+`n_trials=5000` it narrows further** (94.0% vs. 94.8%/95%, roughly 1.3
+standard errors low, not clearly distinguishable from nominal at that
+sample size on its own). More trials measurably help p99 -- the extra 4000
+trials give the bootstrap more of the sample's own extreme tail to resample
+from -- but even at 5000 trials p99 coverage does not close the gap to the
+median's, so the mechanism (a percentile bootstrap cannot invent values more
+extreme than the largest one already sampled) is not fully resolved by a
+larger trial count either. This is the concrete basis for treating p99 as
+indicative-only **at any trial count this project uses**, rather than only
+below some threshold -- the policy set out in the Decision above.
+
+To reproduce: `pytest tests/test_stats.py -k coverage -s` (about 10-11
+minutes; the four numbers above are read directly off its printed output,
+which the test also prints for exactly this reason).

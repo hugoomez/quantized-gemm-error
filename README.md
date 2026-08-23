@@ -43,5 +43,12 @@ make run-sweep  # run configs/default.json -> results/
 make figures    # run the sweep and render figures -> paper/figures/
 ```
 
-`torch` (CPU-only) is intentionally not installed yet -- it's needed
-starting Phase 4.4 and will be added as an explicit extra at that point.
+`torch` (CPU-only), plus `transformers` and `datasets`, are an explicit
+extra (`pip install -e ".[activations]"`, after installing the CPU-only
+torch wheel separately -- see `pyproject.toml`), not part of the default
+install. They exist for exactly one reason in this project's own dependency
+set: Step 4.4's real GPT-2 activation extraction. (A separate, one-off
+`torch` install was used earlier, in Step 1.3, to verify `qgemm.blocks`
+against Microsoft's `microxcaling` reference -- that was a throwaway venv
+outside this project's own tracked dependencies, and is unrelated to the
+`torch` recorded in `requirements.lock`/`ENVIRONMENT.md` now.)

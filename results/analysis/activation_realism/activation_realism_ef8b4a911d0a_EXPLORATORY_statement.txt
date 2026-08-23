@@ -1,0 +1,12 @@
+Step 4.4 real-activation realism check (EXPLORATORY). GPT-2 small, WikiText-2 test split, 300 sequences, 3 layers x 2 presets = 6 cells. Runtime 490.5s.
+
+    h0 / mxfp4 : ek=1.020, nu_equivalent=9.880, observed median(BE)=0.006892, predicted median(BE)=0.006912, CLOSE (within 10%; observed/predicted = 0.997)
+    h0 / nvfp4 : ek=1.020, nu_equivalent=9.880, observed median(BE)=0.005294, predicted median(BE)=0.005362, CLOSE (within 10%; observed/predicted = 0.987)
+    h6 / mxfp4 : ek=101.915, nu_equivalent=4.059, observed median(BE)=0.010733, predicted median(BE)=0.007762, MODERATE GAP (observed/predicted = 1.383)
+    h6 / nvfp4 : ek=101.915, nu_equivalent=4.059, observed median(BE)=0.007018, predicted median(BE)=0.005687, MODERATE GAP (observed/predicted = 1.234)
+   h11 / mxfp4 : ek=7.025, nu_equivalent=4.854, observed median(BE)=0.007718, predicted median(BE)=0.007414, CLOSE (within 10%; observed/predicted = 1.041)
+   h11 / nvfp4 : ek=7.025, nu_equivalent=4.854, observed median(BE)=0.005499, predicted median(BE)=0.005534, CLOSE (within 10%; observed/predicted = 0.994)
+
+4/6 cells land within 10% of the t-Student prediction (observed/predicted ratio range: 0.987 - 1.383).
+
+EXPLORATORY: this does not touch nu*, cota(n), or the PREREGISTRATION.md sec 3 break criterion. Per PREREGISTRATION.md sec 5, real activations are exploratory and are not evidence for or against H1.

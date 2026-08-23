@@ -3279,3 +3279,157 @@ BE fails to reproduce u_eff's ν=1 crossover.**
 
 **3. Not edited into the headline above** -- this note stands alongside it,
 per the task that requested this check.
+
+## Step 4.4 -- real-activation realism check (EXPLORATORY)
+
+**Status: measured, EXPLORATORY -- not a fourth confirmatory result.**
+Every result in Steps 4.1-4.3 was measured on synthetic t-Student(nu)
+operands; PREREGISTRATION.md sec 5.1 lists "real activations" explicitly
+under "exploratory ... never as evidence for or against H1." This step is
+that check: does the t-Student model's error prediction transfer to what a
+real network actually produces? Produced by
+`scripts/check_activation_realism.py`. Output under
+`results/analysis/activation_realism/activation_realism_ef8b4a911d0a_EXPLORATORY*`
+(6-row table, config, statement). To reproduce:
+`python scripts/check_activation_realism.py` (about 8 minutes: ~85s forward
+pass over 300 sequences, the rest is 6 `qgemm` calls at n_tokens=34390 x
+K=768 x N=2304 -- much larger than the 512x512x512 the exact route's own
+performance constraint is defined against, so this script's runtime is not
+held to that bound).
+
+### Setup
+
+GPT-2 small (`gpt2`, HuggingFace `transformers`), WikiText-2 raw test split
+(`load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")` --
+the un-namespaced `"wikitext"` repo id's loading script is broken under
+`datasets>=5`; this is the fix, not a different dataset). 300 non-empty
+lines, tokenized with dynamic per-batch padding (`padding=True`, so each
+batch pads only to its own longest sequence, not a fixed `max_length`;
+`tokenizer.pad_token = tokenizer.eos_token` set first -- GPT-2's tokenizer
+has none by default and batched padding raises without it), truncated at
+256 tokens as a safety net that in practice bound almost nothing (mean line
+length 114.6 tokens). 34390 valid (non-padded) tokens total, identical
+across all three layers since the same 300 sequences and the same attention
+mask feed every hook.
+
+**Layers.** Three depths of GPT-2 small's 12 transformer blocks -- `h0`
+(first), `h6` (middle), `h11` (last) -- all at the **attention input
+projection**, `attn.c_attn`, captured with a forward pre-hook (so the
+activation captured is exactly `ln_1`'s output, before the QKV
+projection). `c_attn` was chosen over `mlp.c_fc` only to keep the hook
+point uniform across all three rows; the choice is held fixed rather than
+mixed. GPT-2's `Conv1D` stores its weight as `(in_features, out_features)`
+-- already `(K, N)` in this project's `A @ B` convention -- so the real
+weight from the same layer is used directly as operand B, no transpose
+needed (unlike an `nn.Linear` weight would require).
+
+**Padding-aware kurtosis and GEMM operand, by construction, not by a
+post-hoc filter.** The attention mask is applied immediately after each
+batch's forward pass, before activations are ever accumulated: padded
+positions are excluded from the array before anything downstream --
+kurtosis, MAD, or the GEMM operand itself -- ever sees them. There is no
+separate "exclude padding" step later that could be forgotten; the
+contaminating rows never enter the accumulated tensor.
+
+**Kurtosis convention, stated explicitly per the roadmap's own named trap.**
+Excess kurtosis, Fisher's definition (`scipy.stats.kurtosis(..., fisher=True,
+bias=True)`): Gaussian maps to **0**, not to 3 (the raw/Pearson convention
+used by some other sources, e.g. `scipy.stats.kurtosis(..., fisher=False)`).
+Computed over the **full flattened array** (all valid tokens x all 768
+hidden features together) as one distribution, matching how this project's
+whole t-Student nu grid already treats an operand -- one elementwise
+distribution, not one per feature column.
+
+**Equivalent nu.** `nu = 4 + 6 / excess_kurtosis`, the closed-form inverse of
+the t-Student excess-kurtosis formula `excess_kurtosis = 6/(nu-4)` (defined
+only for `nu > 4`). For any finite `excess_kurtosis > 0` this inverse is
+algebraically always `> 4` -- the forward map sends `(4, inf)` onto
+`(0, inf)`, so nothing finite and positive can invert back below the
+boundary -- so a layer whose measured excess kurtosis implies `nu <= 4`
+cannot arise from real (finite-sample) data through this formula; the
+domain guard is kept in the code anyway (`nu_equivalent`'s docstring states
+this explicitly) so nothing would be silently extrapolated if it ever did.
+The genuine out-of-domain case is **`excess_kurtosis <= 0`**: no t-Student
+at any `nu > 4` has zero or negative excess kurtosis, so a layer measured at
+or below the Gaussian value would report `nu_equivalent = N/A` with a
+stated reason rather than a number. This did not occur at any of the three
+layers tested (see table below) -- GPT-2's activations are heavy-tailed
+enough everywhere sampled that the case never had to be exercised, though
+`h6`'s measured value (`nu_equivalent = 4.06`) came within 0.06 of the
+boundary, close enough that the guard is not merely decorative.
+
+**Predicted arm.** For each layer's equivalent nu, a synthetic t-Student(nu)
+sample of the identical shape is drawn (`scripts/check_metric_stability.py`'s
+`sample_t`, loaded by path exactly as `scripts/measure_u_eff.py` already
+does) and rescaled so its MAD matches the real activation tensor's own MAD
+-- the same rationale as "Cross-distribution normalization (Step 3.3)":
+isolating tail *shape* from raw *scale*, since `BE` is not exactly
+scale-invariant for E8M0 scales away from power-of-two rescalings. The real
+weight matrix (same layer) is used as operand B in both arms, so the two
+`qgemm` calls differ **only** in operand A's tail shape.
+
+### Results
+
+`median(BE)` (this project's primary confirmatory statistic elsewhere,
+reused here as the summary; no bootstrap CI is computed -- each cell's `BE`
+array already has ~79M elements, an order of magnitude past what any CI
+would meaningfully sharpen for a single point comparison):
+
+| layer | n_tokens | excess kurtosis | nu_equivalent | preset | observed median(BE) | predicted median(BE) | ratio (obs/pred) | verdict |
+|---|---|---|---|---|---|---|---|---|
+| h0  | 34390 | 1.020 | 9.880 | MXFP4 | 0.006892 | 0.006912 | 0.997 | CLOSE |
+| h0  | 34390 | 1.020 | 9.880 | NVFP4 | 0.005294 | 0.005362 | 0.987 | CLOSE |
+| h6  | 34390 | 101.915 | 4.059 | MXFP4 | 0.010733 | 0.007762 | 1.383 | MODERATE GAP |
+| h6  | 34390 | 101.915 | 4.059 | NVFP4 | 0.007018 | 0.005687 | 1.234 | MODERATE GAP |
+| h11 | 34390 | 7.025 | 4.854 | MXFP4 | 0.007718 | 0.007414 | 1.041 | CLOSE |
+| h11 | 34390 | 7.025 | 4.854 | NVFP4 | 0.005499 | 0.005534 | 0.994 | CLOSE |
+
+(CLOSE = within 10% of 1.0; MODERATE GAP = within 50%; would be LARGE GAP
+beyond that -- none landed there.)
+
+### Verdict: transfers well at two of three layers; the outlier-channel layer breaks it
+
+**4 of 6 cells land within 10% of the t-Student prediction, and none land
+outside 50%.** `h0` and `h11` both transfer closely (2-4% off) at both
+presets -- the t-Student model, matched only on excess kurtosis and MAD,
+predicts the real GEMM's `median(BE)` about as well as a same-nu synthetic
+draw predicts a different same-nu synthetic draw would. This is a real,
+positive transfer result for the two layers where it holds.
+
+**`h6` is a genuine miss, not noise, and its own kurtosis number explains
+why.** `h6`'s excess kurtosis (101.9) is 15-100x larger than the other two
+layers (1.0 and 7.0) -- and unlike anything on the project's own nu-grid
+(`nu in {1, 2, 3, 5, 8, 15, 30, gaussian}`): `nu in {1, 2, 3}` have
+*infinite/undefined* population excess kurtosis (nu<=4 is outside the
+closed form's domain entirely, the same boundary this section's formula
+respects), while `nu >= 5` gives a *finite and much smaller* value
+(`6/(5-4) = 6` at the heaviest finite-kurtosis grid point). `h6`'s 101.9 is
+a large-but-finite number that falls in the gap the grid never samples --
+finite, but far larger than the grid's largest finite value. This is the
+well-documented "outlier feature" / "massive
+activation" phenomenon in transformer internals (a small number of
+extreme-magnitude channels, concentrated at particular depths) -- entirely
+plausible as a real property of this specific layer rather than a script
+bug, and it drives `nu_equivalent` to 4.06, a hair above the formula's
+`nu > 4` floor. **A single scalar (kurtosis-matched nu) is evidently not
+enough to characterize a distribution this extreme**: the real data at
+`h6` produces MORE error than a t-Student(4.06) sample of the same MAD and
+the same excess kurtosis, meaning excess kurtosis alone under-describes how
+concentrated `h6`'s outlier mass actually is (t-Student's fourth-moment
+shape is not the only thing that varies at this extreme -- higher moments,
+or the outliers' specific channel-concentrated structure, plausibly matter
+too, and are not tested by a one-parameter kurtosis match).
+
+**Plain-language verdict:** the t-Student model's error predictions
+transfer well to real GPT-2 activations at typical layers (h0, h11 --
+excess kurtosis under 10, well inside the project's own nu-grid range), and
+break down by 23-38% at a layer with extreme outlier-channel kurtosis
+(h6 -- two orders of magnitude beyond typical, right at the formula's
+domain edge). This is consistent with, not contradictory to, the rest of
+this project's synthetic-data findings: it says the synthetic nu-grid is a
+good model of real activations across most of a real network, and names
+the specific condition (extreme, outlier-driven kurtosis) under which a
+single kurtosis-matched nu stops being sufficient. Per PREREGISTRATION.md
+sec 5.1, none of this bears on nu*, P1/P2/P3, or H1 -- it is reported as an
+exploratory realism check on the modeling choice underlying the whole
+study, not as a confirmatory result.

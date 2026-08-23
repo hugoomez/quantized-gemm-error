@@ -32,6 +32,21 @@ dependencies = [
 # pinned set in requirements.lock.
 dev = ["ruff>=0.5"]
 
+# CPU-only torch, plus transformers and datasets, for Step 4.4 (real GPT-2
+# activation extraction over WikiText-2 -- see SPEC.md, "Step 4.4"). Kept out
+# of the default install, per README.md's "not bundled" note: torch's
+# CPU-only wheel is not what a plain `pip install -e ".[activations]"` would
+# resolve from PyPI's default index, so it needs installing separately first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -e ".[activations]"
+# Verify afterwards that `torch.cuda.is_available()` is False (this project's
+# CPU-only discipline, same as every other dependency here).
+activations = [
+    "torch>=2.10",
+    "transformers>=5.10",
+    "datasets>=5.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/qgemm"]
 

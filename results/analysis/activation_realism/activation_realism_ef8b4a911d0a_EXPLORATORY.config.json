@@ -1,0 +1,23 @@
+{
+  "batch_size": 16,
+  "dataset_config": "wikitext-2-raw-v1",
+  "dataset_repo": "Salesforce/wikitext",
+  "dataset_split": "test",
+  "hook_point": "attn.c_attn (input)",
+  "kurtosis_convention": "fisher_excess_gaussian_zero",
+  "layer_indices": {
+    "h0": 0,
+    "h11": 11,
+    "h6": 6
+  },
+  "max_seq_length": 256,
+  "model": "gpt2",
+  "n_sequences": 300,
+  "presets": {
+    "mxfp4": "mxfp4",
+    "nvfp4": "nvfp4"
+  },
+  "script": "check_activation_realism.py",
+  "seed": 0,
+  "version": 1
+}

@@ -3049,3 +3049,137 @@ the bound holds -- not attempted here.
 decompose P1/P2/P3 effects that presuppose an observable nu*, which does
 not exist on this grid; it is not run here, per the task that produced this
 section.
+
+## Step 4.3 -- causal decomposition (EXPLORATORY, post-4.2 pivot)
+
+**Status: measured, EXPLORATORY -- not a resolution of H1.** PREREGISTRATION.md
+sec 8.4 (a dated, disclosed post-data amendment) records why this step exists in
+this form: Step 4.2 found the bound broken at every tested ν, in every one of
+the 16 families, at every tested n, so ν* is undefined everywhere and P1/P2/P3
+(all defined in terms of ν*) cannot be evaluated. This step answers a related
+but weaker, purely descriptive question instead -- which factor, block_size or
+scale_format, moves measured `median(BE)` more, and under what conditions --
+using **no theoretical bound at all**: no `cota(n)`, no `c`, no ratio to 1.0
+anywhere in this computation, only directly measured backward error in log
+space. Produced by `scripts/causal_decomposition.py`. Output under
+`results/analysis/causal_decomposition/causal_decomposition_f9d5d51039ab_EXPLORATORY_*`
+(160-row table: 8 ν × 5 n × 2 round_mode × 2 rht, headline figure, statement),
+filenames and headers marked EXPLORATORY throughout, kept out of
+`results/analysis/nu_star/`'s confirmatory namespace.
+
+### Method
+
+For each (ν, n, round_mode, rht), pooling across the factor held out (ν and n
+are never collapsed -- Step 4.2's failure came partly from trusting a single
+n, so all 5 are reported at every ν, not just the canonical one):
+
+    effect_block(ν,n) = median(log BE | block=16, pooled over scale_format)
+                       − median(log BE | block=32, pooled over scale_format)
+    effect_scale(ν,n) = median(log BE | scale=e4m3, pooled over block_size)
+                       − median(log BE | scale=e8m0, pooled over block_size)
+    interaction(ν,n)  = [median(log BE|16,e4m3) − median(log BE|32,e4m3)]
+                       − [median(log BE|16,e8m0) − median(log BE|32,e8m0)]
+
+**Median of log(BE), not log of median(BE)** -- stated once, applied
+everywhere. Each of the three statistics has a 95% percentile-bootstrap CI
+from a single vectorized pass that resamples all four underlying
+`(block_size, scale_format)` cells independently (so `interaction`'s
+replicates share the same per-replicate draw as `effect_block`/`effect_scale`,
+not a recombination of separately-bootstrapped pieces); `n_resamples=2000`,
+not PREREGISTRATION.md sec 3.2's confirmatory B=10000, disclosed as an
+exploratory-appropriate reduction (same convention Step 3.4's coverage
+simulation used for B=1000, for the same computational-cost reason).
+
+### Headline finding: scale_format dominates block_size's effect on BE, everywhere tested
+
+**`|effect_scale| > |effect_block|` at all 40 canonical (ν, n) cells** (8 ν ×
+5 n, round_mode=rtne, rht=False), **and the ranking is stable across every one
+of the other 3 (round_mode, rht) combinations** (`rtne+rht`: 34/40 scale,
+6/40 block; `sr, no-rht`: 38/40 scale; `sr+rht`: 35/40 scale -- scale wins the
+large majority everywhere, never reverses to an overall block majority in any
+combo). At `n=4096`, canonical: `effect_scale` ranges from −0.162 (gaussian)
+to −0.389 (ν=2), while `effect_block` ranges from −0.042 (gaussian) to −0.246
+(ν=1) -- scale format's pull on `median(BE)` is 2-4× block size's across the
+grid. Both effects are negative throughout (at n>=64): `block=16` and
+`scale=e4m3` (NVFP4's own choices) both reduce `median(BE)` relative to their
+alternatives, consistent with NVFP4 empirically outperforming MXFP4 at the
+element-error level (SPEC.md, "u_eff measurement", "NVFP4 has the lowest
+`u_eff` of the four at every ν").
+
+### The n=16 cell is not a counterexample -- it is not measuring block_size at all
+
+At `n=16`, `effect_block` sits near zero and is significant at only 1 of 8 ν
+(ν=8, +0.0251) -- looking like "block size stops mattering at small n." **It
+does not mean that.** `qgemm.blocks._block_amax` zero-pads a short block to
+make the reshape rectangular, and padding with zeros never changes `max|x|`
+(`_block_amax`'s own docstring: "That is free... the padded block gets
+exactly the scale the shorter block would have"). At `n=16`, `block_size=32`
+therefore produces exactly **one** block spanning all 16 real elements, with
+a scale computed from their own `amax` -- **structurally identical** to
+`block_size=16`'s own single full 16-element block at the same `n`. Under
+RTNE (no randomness), the two configurations quantize the same real elements
+identically. What differs between the two `block_size` arms' trials at
+`n=16` is only the **operand data**: `block_size` is part of `cell_key`
+(`scripts/run_sweep.py`'s `derive_seed`), so the two arms draw independent
+`A`/`B` samples even at matched `n`. `effect_block` at `n=16` is therefore
+measuring pure sampling noise between two datasets pushed through the *same*
+quantizer, not a block-size effect -- consistent with its near-zero, mostly
+non-significant pattern, and the one nominally-significant cell (ν=8) is
+exactly the rate a 95%-CI screen over 8 independent tests would produce by
+chance (~0.4 expected false positives). **The real block-size effect first
+becomes measurable at `n=64`** (the smallest tested `n` where 16 and 32 are
+genuinely different quantizers) and its magnitude is essentially flat from
+`n=64` through `n=4096` at every ν (e.g. ν=1: −0.286, −0.270, −0.257, −0.246
+at n=64/256/1024/4096) -- so "which n you'd have picked" does not change the
+block-size reading once n is large enough for the two arms to differ at all,
+though it would have looked spuriously like "no effect" had only `n=16` been
+examined.
+
+### Ranking consistency across n, and magnitude vs ν
+
+**Dominant factor (scale) is identical across all 5 tested n at every ν** --
+no crossing anywhere in the grid, including through the n=16 cell above
+(scale dominates there too, trivially, since block's "effect" is ~0). This
+directly addresses the fragility that produced Step 4.2's mis-specification:
+here, unlike ν*, the practical answer ("scale format matters more") does not
+depend on which n would have been chosen as primary.
+
+**`effect_block`'s magnitude grows as the tail gets heavier** (n=4096:
+|−0.246| at ν=1 vs |−0.042| at ν=gaussian) -- **consistent with** the u_eff
+level-gap finding already in this document (SPEC.md, "u_eff measurement",
+"Result 2: the level-gap check": `median(BE)` level ratio 32/16 at matched
+n=1024, scale format e8m0, grows from 1.0344× at ν=30 to 1.3206× at ν=1).
+Both measurements, taken independently (different scripts, different
+statistics -- a level ratio there, a log-space median difference here), point
+the same direction: block size matters more under heavy tails. `effect_scale`
+shows the same qualitative pattern (|−0.162| at gaussian growing toward
+|−0.28|-to-`−0.39` at heavy ν, peaking at ν=2 rather than ν=1 specifically --
+not perfectly monotone, reported as observed rather than smoothed).
+
+### Interaction
+
+`interaction` is significant (CI excludes 0) at essentially every (ν,n) cell
+with `n>=64` (e.g. n=4096: −0.095 at ν=1 to −0.028 at ν=gaussian, all
+significant) -- block size's effect on `BE` is measurably larger in magnitude
+at `e4m3` than at `e8m0` (and symmetrically, scale format's effect is larger
+at `block=32` than at `block=16`), i.e. **the two factors do not act purely
+additively**. This is reported as a real, measured interaction, not
+incorporated into the headline "which factor dominates" comparison, which
+uses the pooled (marginal) effects as specified.
+
+### Relationship to Step 4.2 -- what this does and does not settle
+
+**This is not a resolution of H1 as originally formulated**
+(PREREGISTRATION.md sec 8.4, stated there and restated here): H1 (sec 1) and
+P1-P3 (sec 4) are specifically claims about ν* -- where a bound breaks -- and
+this step uses no bound at all, so it cannot confirm, reject, or null-reframe
+H1 in sec 1/2/5's sense. What it does establish, at the weaker/descriptive
+level: **scale_format is the larger lever on backward error in this study's
+factorial design, consistently across ν, n, round_mode and rht** -- the
+practical, MXFP4-vs-NVFP4-relevant part of the original motivation, answered
+directly from measured error rather than through a bound that Step 4.2 showed
+is not calibrated on this grid. The two steps' conclusions are about different
+quantities and neither supersedes the other: Step 4.2 says the bound
+`cota(n)` cannot currently locate a fragility crossing; Step 4.3 says that,
+independent of any bound, scale format moves the raw error more than block
+size does, essentially everywhere this grid was measured.

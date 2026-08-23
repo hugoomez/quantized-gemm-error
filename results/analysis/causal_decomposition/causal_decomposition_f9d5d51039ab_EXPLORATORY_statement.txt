@@ -1,0 +1,82 @@
+Step 4.3 (EXPLORATORY, post-4.2 pivot): block_size/scale_format decomposition of observed median(BE), log space. 160 (nu, n, round_mode, rht) cells (8 nu x 5 n x 2 round_mode x 2 rht), 2000 bootstrap resamples per cell. Runtime 3.0 min. NOT a resolution of H1 as originally formulated (PREREGISTRATION.md sec 1, sec 8.4) -- no cota(n), no c, no ratio to 1.0 anywhere in this computation.
+
+========================================================================
+CANONICAL (round_mode=rtne, rht=False): dominant factor per (nu, n)
+========================================================================
+  n=16:
+    nu=       1: effect_block=+0.0053  [-0.0049,+0.0140]  effect_scale=-0.3584* [-0.3610,-0.3557]  interaction=-0.0009   dominant=scale
+    nu=       2: effect_block=+0.0158  [-0.0011,+0.0301]  effect_scale=-0.3091* [-0.3105,-0.3075]  interaction=+0.0019   dominant=scale
+    nu=       3: effect_block=-0.0046  [-0.0118,+0.0113]  effect_scale=-0.2668* [-0.2680,-0.2656]  interaction=-0.0021   dominant=scale
+    nu=       5: effect_block=-0.0191  [-0.0247,+0.0030]  effect_scale=-0.2273* [-0.2301,-0.2246]  interaction=+0.0005   dominant=scale
+    nu=       8: effect_block=+0.0251* [+0.0087,+0.0298]  effect_scale=-0.2058* [-0.2083,-0.2039]  interaction=+0.0018   dominant=scale
+    nu=      15: effect_block=-0.0036  [-0.0151,+0.0044]  effect_scale=-0.1900* [-0.1928,-0.1880]  interaction=-0.0005   dominant=scale
+    nu=      30: effect_block=+0.0092  [-0.0030,+0.0204]  effect_scale=-0.1816* [-0.1839,-0.1790]  interaction=+0.0033   dominant=scale
+    nu=gaussian: effect_block=+0.0128  [-0.0015,+0.0189]  effect_scale=-0.1729* [-0.1752,-0.1708]  interaction=+0.0011   dominant=scale
+  n=64:
+    nu=       1: effect_block=-0.2861* [-0.3057,-0.2747]  effect_scale=-0.3290* [-0.3362,-0.3216]  interaction=-0.0724*  dominant=scale
+    nu=       2: effect_block=-0.1790* [-0.1987,-0.1610]  effect_scale=-0.3425* [-0.3461,-0.3398]  interaction=-0.0347*  dominant=scale
+    nu=       3: effect_block=-0.1173* [-0.1323,-0.0977]  effect_scale=-0.2942* [-0.2971,-0.2914]  interaction=-0.0304*  dominant=scale
+    nu=       5: effect_block=-0.0844* [-0.0917,-0.0753]  effect_scale=-0.2385* [-0.2420,-0.2349]  interaction=-0.0322*  dominant=scale
+    nu=       8: effect_block=-0.0689* [-0.0725,-0.0622]  effect_scale=-0.2050* [-0.2079,-0.2025]  interaction=-0.0312*  dominant=scale
+    nu=      15: effect_block=-0.0449* [-0.0579,-0.0409]  effect_scale=-0.1795* [-0.1821,-0.1772]  interaction=-0.0340*  dominant=scale
+    nu=      30: effect_block=-0.0609* [-0.0687,-0.0521]  effect_scale=-0.1713* [-0.1734,-0.1685]  interaction=-0.0310*  dominant=scale
+    nu=gaussian: effect_block=-0.0522* [-0.0570,-0.0443]  effect_scale=-0.1621* [-0.1646,-0.1602]  interaction=-0.0288*  dominant=scale
+  n=256:
+    nu=       1: effect_block=-0.2697* [-0.2771,-0.2608]  effect_scale=-0.2859* [-0.2974,-0.2764]  interaction=-0.0974*  dominant=scale
+    nu=       2: effect_block=-0.1982* [-0.2185,-0.1778]  effect_scale=-0.3637* [-0.3720,-0.3586]  interaction=-0.0433*  dominant=scale
+    nu=       3: effect_block=-0.1529* [-0.1579,-0.1368]  effect_scale=-0.3236* [-0.3262,-0.3187]  interaction=-0.0294*  dominant=scale
+    nu=       5: effect_block=-0.0889* [-0.0975,-0.0803]  effect_scale=-0.2550* [-0.2592,-0.2504]  interaction=-0.0300*  dominant=scale
+    nu=       8: effect_block=-0.0722* [-0.0761,-0.0654]  effect_scale=-0.2107* [-0.2153,-0.2074]  interaction=-0.0328*  dominant=scale
+    nu=      15: effect_block=-0.0611* [-0.0694,-0.0485]  effect_scale=-0.1848* [-0.1870,-0.1824]  interaction=-0.0371*  dominant=scale
+    nu=      30: effect_block=-0.0589* [-0.0640,-0.0466]  effect_scale=-0.1719* [-0.1751,-0.1686]  interaction=-0.0327*  dominant=scale
+    nu=gaussian: effect_block=-0.0445* [-0.0608,-0.0351]  effect_scale=-0.1622* [-0.1640,-0.1597]  interaction=-0.0303*  dominant=scale
+  n=1024:
+    nu=       1: effect_block=-0.2565* [-0.2635,-0.2497]  effect_scale=-0.2760* [-0.2829,-0.2678]  interaction=-0.1029*  dominant=scale
+    nu=       2: effect_block=-0.2062* [-0.2261,-0.1963]  effect_scale=-0.3788* [-0.3847,-0.3652]  interaction=-0.0510*  dominant=scale
+    nu=       3: effect_block=-0.1481* [-0.1528,-0.1413]  effect_scale=-0.3408* [-0.3437,-0.3343]  interaction=-0.0313*  dominant=scale
+    nu=       5: effect_block=-0.0898* [-0.1032,-0.0842]  effect_scale=-0.2644* [-0.2677,-0.2570]  interaction=-0.0254*  dominant=scale
+    nu=       8: effect_block=-0.0678* [-0.0734,-0.0649]  effect_scale=-0.2143* [-0.2173,-0.2111]  interaction=-0.0303*  dominant=scale
+    nu=      15: effect_block=-0.0510* [-0.0586,-0.0457]  effect_scale=-0.1859* [-0.1887,-0.1833]  interaction=-0.0323*  dominant=scale
+    nu=      30: effect_block=-0.0522* [-0.0583,-0.0472]  effect_scale=-0.1725* [-0.1743,-0.1708]  interaction=-0.0288*  dominant=scale
+    nu=gaussian: effect_block=-0.0502* [-0.0553,-0.0432]  effect_scale=-0.1618* [-0.1634,-0.1598]  interaction=-0.0294*  dominant=scale
+  n=4096:
+    nu=       1: effect_block=-0.2455* [-0.2510,-0.2395]  effect_scale=-0.2777* [-0.2831,-0.2719]  interaction=-0.0949*  dominant=scale
+    nu=       2: effect_block=-0.2000* [-0.2185,-0.1965]  effect_scale=-0.3893* [-0.4032,-0.3819]  interaction=-0.0629*  dominant=scale
+    nu=       3: effect_block=-0.1466* [-0.1573,-0.1367]  effect_scale=-0.3419* [-0.3502,-0.3369]  interaction=-0.0331*  dominant=scale
+    nu=       5: effect_block=-0.0905* [-0.0985,-0.0820]  effect_scale=-0.2659* [-0.2715,-0.2600]  interaction=-0.0314*  dominant=scale
+    nu=       8: effect_block=-0.0798* [-0.0856,-0.0663]  effect_scale=-0.2171* [-0.2210,-0.2149]  interaction=-0.0322*  dominant=scale
+    nu=      15: effect_block=-0.0603* [-0.0665,-0.0530]  effect_scale=-0.1869* [-0.1887,-0.1847]  interaction=-0.0333*  dominant=scale
+    nu=      30: effect_block=-0.0561* [-0.0612,-0.0431]  effect_scale=-0.1739* [-0.1766,-0.1704]  interaction=-0.0292*  dominant=scale
+    nu=gaussian: effect_block=-0.0416* [-0.0596,-0.0330]  effect_scale=-0.1624* [-0.1643,-0.1599]  interaction=-0.0281*  dominant=scale
+  (* = CI excludes 0, i.e. statistically distinguishable from no effect)
+
+Dominant factor across all 40 canonical (nu, n) cells: {'scale': 40}
+  nu values where block_size dominates at >=1 n: []
+  nu values where scale_format dominates at >=1 n: ['1', '2', '3', '5', '8', '15', '30', 'gaussian']
+
+RANKING CONSISTENCY ACROSS n (fixed nu, canonical sub-config):
+  nu=       1: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=       2: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=       3: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=       5: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=       8: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=      15: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=      30: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+  nu=gaussian: dominant factor across n in {1024, 16, 256, 4096, 64} = ['scale']  [CONSISTENT]
+
+The ranking is CONSISTENT across every tested n at every nu -- not sensitive to which n would have been picked as primary.
+
+MAGNITUDE vs nu (n=4096, canonical): |effect_block| ranges 0.0416 (nu=gaussian) to 0.2455 (nu=1); |effect_scale| ranges 0.1624 (nu=gaussian) to 0.3893 (nu=2).
+block_size's effect on log(BE) GROWS as the tail gets heavier (nu=1 vs nu=gaussian, n=4096) -- cross-checked against the u_eff level-gap finding (SPEC.md, 'u_eff measurement', Result 2: median(BE) level ratio 32/16 at matched n=1024 grows from 1.0344 at nu=30 to 1.3206 at nu=1), CONSISTENT with it.
+
+========================================================================
+ROBUSTNESS across the other 3 (round_mode, rht) combos
+========================================================================
+  round_mode=rtne rht=False: dominant-factor counts = {'scale': 40}  (overall majority: scale)
+  round_mode=rtne rht=True : dominant-factor counts = {'scale': 34, 'block': 6}  (overall majority: scale)
+  round_mode=sr   rht=False: dominant-factor counts = {'scale': 38, 'block': 2}  (overall majority: scale)
+  round_mode=sr   rht=True : dominant-factor counts = {'scale': 35, 'block': 5}  (overall majority: scale)
+
+Overall majority dominant factor per combo: {('rtne', False): 'scale', ('rtne', True): 'scale', ('sr', False): 'scale', ('sr', True): 'scale'}. Stable across all 4 round_mode x rht combinations: True.
+
+This relates to, but does not replace, Step 4.2's grid mis-specification finding: Step 4.2 showed the c=1 theoretical bound is uncalibrated everywhere on this grid, so no nu* exists to compare between block sizes or scale formats; this step answers a narrower, descriptive question -- which factor moves raw backward error more, and under what conditions -- using no bound at all. Neither step's conclusion transfers to the other's question.

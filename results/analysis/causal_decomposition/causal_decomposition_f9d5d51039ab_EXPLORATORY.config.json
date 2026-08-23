@@ -1,0 +1,11 @@
+{
+  "canonical_rht": false,
+  "canonical_round_mode": "rtne",
+  "ci": 0.95,
+  "n_resamples": 2000,
+  "script": "causal_decomposition.py",
+  "seed": 0,
+  "status": "EXPLORATORY -- see PREREGISTRATION.md sec 8.4",
+  "sweep_dir": "C:\\Users\\gomez\\quantized-gemm-error\\results\\sweep_e945b87a2395",
+  "version": 1
+}

@@ -344,6 +344,7 @@ version and any later state is diffable against it.
 | 2026-08-20 | §3, §3.1 | 🧠1 resolved: the provisional `bound(n) = c · √n · u_eff` is superseded by `cota(n, format, block, ν) = c · u_eff(format, block, ν) / √n` — a **decaying** form, not a growing one | The primary route accumulates in exact fp64, so the repeated-rounding mechanism that gives γ_n and √n·u their n-dependence is not physically present. The surviving mechanism is partial cancellation of one-time input-quantization errors, which makes `BE` decay as n^(-1/2). Measured: slopes −0.4978 (block 16) / −0.4966 (block 32) at ν = 30. | **Pre-data** |
 | 2026-08-22 | §3, §3.2 | Robust-statistics methodology resolved (Step 3.4): median and p90 carry all confirmatory statistical weight (ν* localization included); p99 is reported for every cell but is INDICATIVE ONLY, at any trial count, never the basis of a firm claim | Empirical 95%-CI coverage simulation (t-Student ν=2, 1000 experiments/cell): median coverage 95.5% (n_trials=1000) / 94.8% (n_trials=5000), close to nominal; p99 coverage 92.7% (n_trials=1000) / 94.0% (n_trials=5000), measurably below the median's and below nominal at n_trials=1000, narrower but still short at n_trials=5000 — a percentile bootstrap cannot invent values past the sample's own extreme tail. | **Pre-data** |
 | 2026-08-22 | §4.0, §7 item 2 | **`n_primary` declared: 4096** (the largest tested contraction dimension, `configs/sweep_main.yaml`'s `main_grid.n` upper end) | Author's choice, on grounds stated independently of any ν*/H1 outcome: n=4096 is closest to real GEMM contraction dimensions in LLM inference/training (the most externally relevant regime), and is where the √n-decay derivation's asymptotic assumptions (Step 🧠1, cancellation over many roughly-independent blocks) are most likely to hold cleanly. See 8.3 for the full disclosure, including timing. | **Post-data (disclosed, see 8.3)** |
+| 2026-08-23 | §1, §4, §4.1 | **Pivot to Step 4.3 as PRIMARY vehicle for the block-vs-scale question, applied to observed `median(BE)` directly rather than to ν*.** P1/P2/P3 as formulated (comparisons of ν*) cannot be evaluated: Step 4.2 found the bound broken at every tested ν, in every one of the 16 families, at every tested n — there is no ν* on this grid for any comparison to be made between. EXPLORATORY, not a resolution of H1 as originally stated. | Step 4.2's grid mis-specification (§5.1's own named contingency) leaves P1/P2/P3 undefined, not merely underpowered — no amount of re-analysis of the existing grid recovers a ν* to compare. The block-vs-scale question motivating H1 is still answerable in a weaker, descriptive form directly from measured `BE`, without `cota(n)` or `c=1` (both of which Step 4.2 showed are the actually-broken part, not the raw error data). See SPEC.md, "Step 4.3 — causal decomposition (EXPLORATORY, post-4.2 pivot)". | **Post-data** |
 
 ### 8.1 — 2026-08-20: 🧠1 resolved, bound functional form only
 
@@ -506,6 +507,64 @@ error metric), and 4 (trial counts) remain formally unclosed by a dated
 amendment, though each is de facto fixed by the frozen `sweep_main.yaml`
 grid and by `be_median`'s established use throughout Step 3.3/3.4/4.1 as the
 empirical-error quantity. Closing those formally is not done here.
+
+### 8.4 — 2026-08-23: pivot to Step 4.3 as the primary vehicle for the block-vs-scale question
+
+**What changed.** §1's H1 and §4's P1/P2/P3 are all stated in terms of ν* —
+a crossing point in the bound-broken/bound-holds pattern across the ν grid.
+Step 4.2 (SPEC.md, "Step 4.2 — ν* localization") found the bound broken at
+every one of the 8 tested ν, in every one of the 16 (block_size x
+scale_format x round_mode x rht) families, at every one of the 5 tested n —
+exactly the all-censored-above contingency §5.1 names by name. There is no
+crossing anywhere on this grid for any of the 16 families, so ν* is
+undefined for all of them, not merely hard to localize precisely. P1/P2/P3
+therefore cannot be evaluated as formulated — not "evaluated and found no
+effect," but structurally undefined, since both terms of every comparison
+(r(32,s), r(16,s), etc.) are pinned at the same censored value by
+construction.
+
+This amendment records a pivot: **Step 4.3's originally-planned causal
+decomposition (block_size x scale_format, from the Step 1.5 2x2) becomes the
+PRIMARY vehicle for the practical block-vs-scale question**, applied
+directly to observed `median(BE)` (in log space) rather than to ν* or to
+`cota(n)`. Concretely: `effect_block = median(log BE | block=16) -
+median(log BE | block=32)` and the symmetric `effect_scale`, each with a
+bootstrap CI, computed at every (ν, n, round_mode, rht) cell rather than
+collapsed into a single ν* per family.
+
+**This is EXPLORATORY, not a resolution of H1 as originally formulated.**
+§1's H1 is specifically a claim about ν* — "there exists a critical ν* such
+that ... ν*(block=32) > ν*(block=16)" — and P1-P3 (§4) are specifically
+comparisons of ν* (or, for P3, a decomposition of such a comparison). A
+direct comparison of `median(BE)` is a different, weaker claim: it can say
+which format has more error and by how much at a given (ν, n), but it says
+nothing about *where a bound breaks*, because it does not reference any
+bound at all. §3.2's anti-circularity constraint (`c` fixed at 1, never
+re-fit) and §3's break criterion are both about the *ratio* to `cota(n)`;
+Step 4.3 as pivoted here uses neither — no `cota(n)`, no `c`, no bootstrap
+CI of a ratio to 1.0 — only directly measured backward error. It therefore
+cannot confirm, reject, or reframe-as-null H1 in the sense §1/§2/§5 define;
+it is reported as a separate, descriptive finding about the practical
+MXFP4-vs-NVFP4 comparison, motivated by the same NVIDIA-gap question that
+motivated H1 but not a test of H1's specific ν*-crossing claim.
+
+**Why not simply stop at Step 4.2's null result.** §5.1 already anticipated
+exactly this scenario ("bound fails even in the near-Gaussian regime...a
+strong result in its own right") and gives it a name (grid
+mis-specification) but does not prescribe a next step beyond reporting it.
+Step 4.3 was already planned (Step 1.5's 2x2 factorial exists specifically
+to support a block-vs-scale decomposition) and needs no new instrumentation
+— only a different target quantity (`BE` directly, not `BE`'s ratio to a
+now-known-uncalibrated bound). Declaring this pivot before running Step 4.3
+keeps the same anti-circularity discipline the rest of this document
+enforces: the decision to reframe was made because of Step 4.2's structural
+finding (no ν* exists), not because a first look at `median(BE)` differences
+suggested a more favorable story.
+
+**Timing — post-data**, same disclosure standard as 8.3: Step 4.2's result
+was fully known (committed, `results/analysis/nu_star/`) before this
+amendment was written. Nothing about that is hidden; the amendment exists
+specifically because of what Step 4.2 found.
 
 ## 9. Adversarial Review Notes (2026-08-19)
 

@@ -40,7 +40,7 @@ make install    # creates .venv, installs deps, writes requirements.lock and ENV
 make test       # run test suite (pytest discovers tests/, `import qgemm` must work)
 make lint       # ruff
 make run-sweep  # run configs/default.json -> results/
-make figures    # run the sweep and render figures -> paper/figures/
+make figures    # render paper/figures/ from committed results/analysis/ tables (no sweep re-run)
 ```
 
 `torch` (CPU-only), plus `transformers` and `datasets`, are an explicit

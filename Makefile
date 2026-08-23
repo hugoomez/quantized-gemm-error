@@ -27,5 +27,5 @@ lint:
 run-sweep:
 	$(VENV_PY) scripts/run_sweep.py
 
-figures: run-sweep
+figures:
 	$(VENV_PY) scripts/make_figures.py

@@ -3433,3 +3433,64 @@ single kurtosis-matched nu stops being sufficient. Per PREREGISTRATION.md
 sec 5.1, none of this bears on nu*, P1/P2/P3, or H1 -- it is reported as an
 exploratory realism check on the modeling choice underlying the whole
 study, not as a confirmatory result.
+
+### Addendum -- h6 mismatch diagnostic (EXPLORATORY, cheap follow-up; headline numbers above unchanged)
+
+A quick, targeted follow-up on the `h6` miss, requested after the headline
+above was reported. **No GEMM was rerun and no number above was changed or
+recomputed** -- this reuses the already-committed table and re-extracts
+only `h6`'s own activation tensor (skipping the other two layers and both
+presets' `qgemm` calls entirely, since neither is needed for a kurtosis /
+channel-index diagnostic), verified to be the *identical* tensor by
+recomputing its excess kurtosis and matching it exactly against the value
+already on record (101.91520380555781, bit-for-bit).
+
+**1. Direction of the miss, stated explicitly.** `ratio_observed_over_predicted`
+is **1.383 (MXFP4) and 1.234 (NVFP4)** at `h6` -- both **greater than 1**.
+**Observed error was HIGHER than predicted**, i.e. the real activations
+produced *more* GEMM backward error than the MAD/kurtosis-matched synthetic
+t-Student(4.06) draw did, not less. This was already stated in prose above
+("the real data at `h6` produces MORE error than a t-Student(4.06) sample")
+but the signed ratio is repeated here because the original table did not
+flag the direction as its own reportable fact.
+
+**2. Channel-concentration check.** For the full `h6` tensor (34390 tokens x
+768 channels, 26 411 520 elements), the literal **20 single largest `|activation|`
+values across the entire tensor** -- not a threshold, not a top-1% pool, the
+actual top 20 -- fall in **exactly one channel: index 64**, across 20
+distinct tokens. Widening to the top-1% pool (264 116 elements) softens this
+but does not erase it: channel 64 alone accounts for 13.0% of that pool and
+appears in the top-1% set for **all 34390 tokens** (i.e. channel 64 is among
+the largest-magnitude entries of essentially every single token's activation
+vector, not merely spiking occasionally); the 5 most frequent channels
+(64, 266, 480, 87, 326) account for 58.2% of the top-1% pool, and the top 10
+account for 75.3%. Per-channel max magnitude confirms the same handful:
+channel 64 peaks at 8.06, channels 87/480/266 at 7.08/6.55/5.31, the next
+channel down (640) at only 2.76 -- a sharp drop, not a smooth tail. (The
+top-1% pool does touch 767 of 768 channels at least once, which is expected
+and not in tension with the above: almost any channel will occasionally
+contain a moderately large value across 34390 tokens; concentration is about
+*where the mass piles up*, not about which channels are ever represented at
+all.)
+
+**3. Verdict: CONCENTRATED -- consistent with, though not proof of, the
+"massive activations" mechanism.** A small, fixed set of channel indices
+(most starkly, index 64 alone) dominates `h6`'s extreme-value tail across
+nearly all 34390 tokens, matching the "massive activations" / "outlier
+feature" pattern reported in the literature on transformer internals (e.g.
+Sun et al. 2024, "Massive Activations in Large Language Models"; Liu et al.
+similarly document persistent per-channel outliers in transformer hidden
+states) rather than generic scattered heavy-tailedness. This is a
+**plausible, disclosed explanation for
+the mismatch, not a proven one**: real activations with a few structurally
+fixed extreme channels violate the t-Student model's implicit iid-across-
+elements assumption in a specific way synthetic t-Student draws never do --
+every synthetic sample's large values are randomly located and change from
+draw to draw, while `h6`'s are anchored to the same handful of channels on
+essentially every token. Whether that specific structural difference is
+*mechanistically* what drives the 23-38% BE gap (as opposed to being
+correlated with it) is not established here -- no ablation isolating channel
+structure from the kurtosis-matching alone was run, and none is claimed. Had
+the top values instead been scattered across many distinct, changing
+channels, this addendum would have reported that plainly instead and left
+the mismatch unexplained; that is not what was found.

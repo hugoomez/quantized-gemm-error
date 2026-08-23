@@ -3183,3 +3183,99 @@ quantities and neither supersedes the other: Step 4.2 says the bound
 `cota(n)` cannot currently locate a fragility crossing; Step 4.3 says that,
 independent of any bound, scale format moves the raw error more than block
 size does, essentially everywhere this grid was measured.
+
+### Reconciliation with the u_eff-based finding -- PARTIAL AGREEMENT, no crossover in BE
+
+**Check performed on request, against the earlier per-element finding** (SPEC.md,
+"u_eff measurement", "Result 3: other patterns worth noting"): u_eff's own
+marginal effects show block-size *exceeding* scale-format at ν=1 (block-size
+effect 1.155 vs scale-format effect 1.113, E8M0/block16 arm) and the two
+*cross* between ν=1 and ν=2 (scale format effect 1.144 > block-size effect
+1.120 already at ν=2). Step 4.3's headline says scale dominates "consistently
+across all 8 ν," which on its face looks like it disagrees with a real
+crossover. Re-examined against Step 4.3's own already-computed table plus one
+new point-estimate query against the same sweep data (no new sweep, no new
+bootstrap -- medians only, reusing `be_median` exactly as Step 4.3 does):
+
+**1. The magnitudes, canonical sub-config, ν∈{1,2} vs ν=15, all 5 n:**
+
+Pooled (Step 4.3's own statistic, log space, from the already-committed
+table) -- gap = |effect_scale| − |effect_block|:
+
+| n | gap at ν=1 | gap at ν=2 | gap at ν=15 |
+|---|---|---|---|
+| 16 (degenerate, see below) | 0.353 | 0.293 | 0.186 |
+| 64 | 0.043 | 0.164 | 0.135 |
+| 256 | 0.016 | 0.166 | 0.124 |
+| 1024 | 0.020 | 0.173 | 0.135 |
+| 4096 | 0.032 | 0.189 | 0.127 |
+
+**Yes, visibly narrower at ν=1** (gap 0.016-0.043 at n≥64) **than at ν=15**
+(gap 0.124-0.135) -- roughly a 4-8x narrowing, not a small effect. **ν=2 is
+not narrower at all** -- its gap (0.16-0.19) is the *widest* of the three
+points checked, wider even than ν=15. So the narrowing u_eff shows between
+ν=1 and ν=2 does not carry over to BE in the same place: BE's gap narrows
+sharply exactly at ν=1 and has already reopened, wider than baseline, by
+ν=2.
+
+**No crossover.** Point estimates never flip (`|effect_scale| >
+|effect_block|` at every one of the 40 canonical cells, already stated in the
+headline), and the 95% CIs do not even overlap at ν=1: e.g. at n=4096,
+|effect_block| ∈ [0.2395, 0.2510] and |effect_scale| ∈ [0.2719, 0.2831] --
+disjoint, scale significantly larger even at the heaviest tail tested, at
+every n≥64. The disaggregated, u_eff-table-matching view (per-arm ratios,
+point estimates, same sweep data) confirms this directly -- `block@e8m0`
+never exceeds `scale@block16` at any tested n, including ν=1:
+
+| n | block@e8m0 ratio (32/16) | scale@block16 ratio (e8m0/e4m3) |
+|---|---|---|
+| 64 | 1.322 | 1.465 |
+| 256 | 1.329 | 1.483 |
+| 1024 | 1.317 | 1.510 |
+| 4096 | 1.298 | 1.524 |
+
+(ν=1 shown; block@e8m0 is 30-32% worse for block=32, scale@block16 is
+46-52% worse for E8M0 -- scale's lead is smaller than at milder ν, per the
+narrowing above, but never erased.) **Verdict: PARTIAL AGREEMENT.** The
+direction (narrowing at heavy tail) replicates; the magnitude (an actual
+sign flip) does not. Step 4.3's headline ("consistently across all 8 ν") is
+accurate as a statement about which factor's point estimate is larger, and
+should not be read as claiming the margin is uniform -- it is not, and ν=1
+is where it is thinnest by a wide margin.
+
+**2. A candidate mechanism, checked for plausibility, not asserted.** The
+task's hypothesis: u_eff's near-zero cut (SPEC.md, "u_eff measurement," "The
+near-zero policy") excludes flushed elements entirely, while `BE` is the
+full end-to-end GEMM error, which does not exclude their contribution. The
+survival-fraction table already in this document (SPEC.md, "Post-hoc: the
+near-zero cut is not neutral between the two arms") shows exactly the kind
+of asymmetry this would require: at ν=1, block=32 retains only 36.0% of its
+elements past the cut versus block=16's 51.7% -- block=32 loses proportionally
+more to flushing, and does so most severely at the heaviest tail. If those
+excluded elements contribute disproportionate error under block=32
+specifically, `BE` (which includes them) should show a *larger* block-size
+penalty than `u_eff` alone predicts -- and it does: block@e8m0 goes from
+1.155 (u_eff, ν=1) to 1.298 (BE, n=4096, ν=1), a real and sizeable
+amplification in the direction the hypothesis predicts.
+
+**But this alone does not explain the pattern, and should not be presented
+as though it does.** The scale-format effect amplifies from u_eff to BE by
+even more at ν=1 (1.113 → 1.524, block16 arm) than the block-size effect
+does (1.155 → 1.298) -- if flushed elements were the whole story and were
+specifically a block-size phenomenon, the scale-format gap should not grow
+faster. `u_eff`'s near-zero cut is defined per-element relative to each
+element's own effective scale and is measured identically regardless of
+`scale_format`, but this document does not currently report a
+`scale_format`-conditioned survival-fraction table (only the
+`block_size`-conditioned one, at fixed E8M0) -- so whether E8M0 also loses
+disproportionately more elements than E4M3 at ν=1, which would extend the
+same mechanism to the scale-format effect, is **not verified here** and
+would need that additional breakdown (not computed in this check, per the
+instruction to reuse existing data rather than run new analysis).
+**Conclusion: the near-zero-cut hypothesis is plausible and directionally
+consistent for the block-size component, unconfirmed for the scale-format
+component, and therefore not established as a complete explanation of why
+BE fails to reproduce u_eff's ν=1 crossover.**
+
+**3. Not edited into the headline above** -- this note stands alongside it,
+per the task that requested this check.

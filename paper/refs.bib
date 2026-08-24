@@ -11,6 +11,30 @@
 % verification" section for what remains open.
 
 % ─────────────────────────── TIER 1 ───────────────────────────
+% Verified 2026-08-24 (during the same reference-verification pass that
+% produced this file, prior to this entry being requested for inclusion)
+% by web search cross-referencing publisher/bookseller records: ISBN
+% 0-89871-521-0 / 978-0898715217, DOI 10.1137/1.9780898718027, SIAM,
+% 2nd ed., 2002 -- matches the title/author/edition/publisher/year given.
+% Closes the gap flagged in SPEC.md's "Step 6.1 -- reference verification"
+% section ("Open gaps," item 1): this entry was outside the originally
+% supplied 13-entry scope, so it was verified but not added on this
+% session's own initiative; now added on explicit request. Supports: the
+% classical `gamma_n` bound (`src/qgemm/bounds.py`'s `gamma_n()`, whose
+% docstring already carries this exact citation inline; SPEC.md's
+% "Theoretical bounds (`qgemm.bounds`)" and both "Gamma_n sanity check"
+% sections) -- the literature-standard worst-case bound this project's own
+% derived bound (`u_eff/sqrt(n)`, SPEC.md's "Theoretical bound definition
+% (day 1) -- RESOLVED") explicitly supersedes for the exact-accumulation
+% case, not a bound this project claims to have improved on in general.
+@book{higham2002accuracy,
+  title     = {Accuracy and Stability of Numerical Algorithms},
+  author    = {Higham, Nicholas J.},
+  edition   = {2nd},
+  publisher = {SIAM},
+  year      = {2002}
+}
+
 % Verified 2026-08-24 by direct fetch of the arXiv abstract/HTML page.
 % Supports: PREREGISTRATION.md P3's "NVIDIA's reported 36%-more-tokens
 % gap" and SPEC.md's "Independent corroboration (Step 6.1)" note on

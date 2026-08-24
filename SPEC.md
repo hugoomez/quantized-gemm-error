@@ -3546,12 +3546,17 @@ the mismatch unexplained; that is not what was found.
 
 ## Step 6.1 -- reference verification
 
-**Status: 10 of 13 supplied bibliographic entries independently verified
-today (2026-08-24) against live primary sources; 2 corrections applied to
-this file; 2 gaps found and left open, not silently resolved.** This section
-records what was checked, what changed, and what did not. `paper/refs.bib`
-is the artifact this verification produced; every entry there carries its
-own dated, source-specific comment.
+**Status (updated 2026-08-24): 15 bibliographic entries in `paper/refs.bib`,
+each independently verified against live primary sources; 2 corrections
+applied to this file; 1 gap remains open, not silently resolved.** This
+section records what was checked, what changed, and what did not.
+`paper/refs.bib` is the artifact this verification produced; every entry
+there carries its own dated, source-specific comment. Two entries
+(`tseng2025training`, `higham2002accuracy`) were added after the original
+13-entry pass, each on later explicit request and each verified before
+being added, not copied in on request alone -- see the "Three conventions
+in the literature" note above for the former and "Open gaps" item 1 below
+(now closed) for the latter.
 
 **7 citations verified with claim-level confirmation** (not just
 existence -- the specific sentence/figure/definition each is cited for was
@@ -3629,24 +3634,13 @@ optional import, skipped if unavailable).
 
 ### Open gaps -- not resolved here
 
-1. **The classical `gamma_n` bound (Higham, *Accuracy and Stability of
-   Numerical Algorithms*, 2nd ed., SIAM, 2002) has no entry in
-   `paper/refs.bib`.** This citation is already fully recorded, with
-   author/title/edition/publisher/year, in `src/qgemm/bounds.py`'s own
-   module docstring, and is used in this file's "Theoretical bounds"
-   section and both "Gamma_n sanity check" sections. It was not part of
-   the 13-entry list supplied for this verification pass, so it was not
-   added to `refs.bib` unilaterally -- the supplied list was treated as an
-   explicit, closed scope, not a starting point to extend without
-   confirmation. Under this same Step 6.1 policy ("unverified references
-   are removed from the paper entirely -- no exceptions, no placeholders"),
-   the paper cannot cite `gamma_n` to Higham without a corresponding
-   `refs.bib` entry, so this needs an explicit decision before the paper
-   is finalized. (For what it's worth: this entry would be easy to add and
-   is well-established -- ISBN 0-89871-521-0 / 978-0898715217, DOI
-   10.1137/1.9780898718027, cross-checked today against SIAM's and
-   multiple booksellers' records -- but adding it is a decision left to
-   the author, not made here.)
+1. ~~The classical `gamma_n` bound (Higham 2002) has no entry in
+   `paper/refs.bib`.~~ **Closed 2026-08-24.** `higham2002accuracy` added to
+   `paper/refs.bib` on explicit request, using the ISBN/DOI already
+   verified during the original pass (0-89871-521-0 / 978-0898715217,
+   DOI 10.1137/1.9780898718027). Supports `src/qgemm/bounds.py`'s
+   `gamma_n()`, this file's "Theoretical bounds (`qgemm.bounds`)" section,
+   and both "Gamma_n sanity check" sections.
 2. **Only 2 of the "three scoop-risk papers" originally requested have
    been supplied and verified.** `fasoli2026finer` and
    `egiazarian2026bridging` are both confirmed real and on-topic for

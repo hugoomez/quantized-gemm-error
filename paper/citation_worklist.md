@@ -138,16 +138,31 @@ are visible before the verification pass rather than silently filled in here.
   `ml_dtypes`" subsection (lines ~92–120), and the bf16 accumulation section
   (line ~670, `ml_dtypes.bfloat16`).
 
-## 8. arXiv:2408.02897 reproduction target
+## 8. arXiv:2408.02897 — dual role: reproduction target AND scoop-risk differentiator
 
-- **Claim:** This project's `qgemm.metrics.backward_error` pipeline
-  qualitatively reproduces the direction of a published finding — that FP8
-  stays much more bounded than INT8 as t-Student tails get heavier — from
-  the "methodologically closest prior work" to this project.
+- **Claim (reproduction role):** This project's `qgemm.metrics.backward_error`
+  pipeline qualitatively reproduces the direction of a published finding —
+  that FP8 stays much more bounded than INT8 as t-Student tails get heavier —
+  from the "methodologically closest prior work" to this project.
+- **Claim (scoop-risk role, added 2026-08-24):** Despite being the closest
+  methodological antecedent — same backward-error metric
+  (`BE = |L·R − Q(L,R)| / (|L|·|R|)`, confirmed verbatim in the source's
+  Sec. IV-A during Step 6.1 verification) and the same t-Student
+  distributional family — this paper studies only per-tensor/per-vector
+  INT8 and FP8, never block-scaled microscaling formats (MXFP4/NVFP4), and
+  contains no analogue of this project's H1 (the block-size fragility
+  crossing ν*, PREREGISTRATION.md §1). It is therefore the paper closest in
+  spirit to this one that does *not* already answer this project's actual
+  question, which is exactly what a scoop-risk citation needs to
+  demonstrate — not merely "a nearby paper exists," but "the nearest paper
+  doesn't already do this." This resolves item 8's status as one of the
+  originally-requested "three scoop-risk papers" (see the section below,
+  formerly "not found").
 - **Bibliographic info recorded:** Rasquinha & Tabak (Google), *"A Metric
-  Driven Approach to Mixed Precision Training"*, arXiv:2408.02897. (Authors,
-  affiliation, title, and arXiv ID all present — the most bibliographically
-  complete entry in this list.)
+  Driven Approach to Mixed Precision Training"*, ASSYST workshop @ ISCA
+  2023, arXiv:2408.02897. (Authors, affiliation, venue, title, and arXiv ID
+  all present and independently verified — see `paper/refs.bib`'s
+  `rasquinha2023metric` entry.)
 - **Used in:** `SPEC.md`, "arXiv:2408.02897 reproduction — MEASURED,
   qualitative match" (line 1222 onward); also referenced in `SPEC.md`'s
   `int8_quantize` description as "the classical baseline used by the
@@ -202,20 +217,37 @@ are visible before the verification pass rather than silently filled in here.
 
 ---
 
-## Item requested but not found: "the three scoop-risk papers"
+## Item, formerly "not found": "the three scoop-risk papers" — RESOLVED 2026-08-24
 
-A full-text, case-insensitive search for "scoop" across `SPEC.md`,
-`PREREGISTRATION.md`, `README.md`, `paper/README.md`, every tracked file's
-git history (commit messages and diffs), and the untracked
-`ultima_conversacion.txt` returned **zero matches**. There is no group of
-three (or any number of) papers anywhere in this project's documentation
-framed around scoop risk, competing/concurrent work, or a similar concept
-that this compiler could locate. Per the task's own instruction not to
-fabricate or infer beyond what is actually present, this item is reported as
-**not found** rather than populated with placeholder entries. If this refers
-to material that exists outside this repository (e.g. discussed verbally or
-in a separate document), it will need to be supplied before a citation entry
-can be compiled for it.
+**Original finding (superseded below, kept for the record):** a full-text,
+case-insensitive search for "scoop" across `SPEC.md`, `PREREGISTRATION.md`,
+`README.md`, `paper/README.md`, every tracked file's git history, and the
+untracked `ultima_conversacion.txt` returned zero matches, and this item was
+reported as not found rather than populated with placeholder entries.
+
+**Resolution.** All three scoop-risk papers are now present and verified —
+no fourth paper was ever needed, and none was fabricated to reach the count
+of three:
+
+1. **`rasquinha2023metric`** (item 8, above) — the closest methodological
+   antecedent (same BE metric, same t-Student family), differentiated by
+   scope: no block-scaled microscaling, no ν* fragility hypothesis. Playing
+   this dual role (reproduction target *and* scoop-risk differentiator) is
+   not a stretch reached only by relabeling — it is arguably the single
+   most load-bearing scoop-risk citation of the three, since it is the
+   paper an outside reader is most likely to ask "doesn't this already do
+   what you're doing?" about, and the honest answer ("no, and here's
+   specifically why") is what a scoop-risk citation exists to provide.
+2. **`fasoli2026finer`** (item 3 of the final refs.bib list) — differentiated
+   by mechanism: driven by narrow tensor distributions, not the heavy-tailed
+   operand regime this project studies.
+3. **`egiazarian2026bridging`** (item 4 of the final refs.bib list) —
+   differentiated by metric and operand model: MSE against a Laplace
+   assumption (Definitions 1 and 3, confirmed verbatim by direct PDF fetch
+   during Step 6.1), not backward error against t-Student.
+
+All three are in `paper/refs.bib` with dated, source-checked verification
+comments. No further search is needed for this item.
 
 ## Related finding, not a citation to add: the "Appendix A" phantom citation
 

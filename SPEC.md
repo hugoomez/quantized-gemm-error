@@ -3548,7 +3548,9 @@ the mismatch unexplained; that is not what was found.
 
 **Status (updated 2026-08-24): 15 bibliographic entries in `paper/refs.bib`,
 each independently verified against live primary sources; 2 corrections
-applied to this file; 1 gap remains open, not silently resolved.** This
+applied to this file; both originally-flagged gaps now closed (one by a
+new entry, one by re-scoping an existing entry to a role already
+supported by facts already verified -- see "Open gaps" below).** This
 section records what was checked, what changed, and what did not.
 `paper/refs.bib` is the artifact this verification produced; every entry
 there carries its own dated, source-specific comment. Two entries
@@ -3641,13 +3643,15 @@ optional import, skipped if unavailable).
    DOI 10.1137/1.9780898718027). Supports `src/qgemm/bounds.py`'s
    `gamma_n()`, this file's "Theoretical bounds (`qgemm.bounds`)" section,
    and both "Gamma_n sanity check" sections.
-2. **Only 2 of the "three scoop-risk papers" originally requested have
-   been supplied and verified.** `fasoli2026finer` and
-   `egiazarian2026bridging` are both confirmed real and on-topic for
-   scoop-risk differentiation (see above). No third paper was included in
-   the bibliographic data supplied for this pass, and `paper/citation_worklist.md`'s
-   original full-text search of this repository's own documents and git
-   history found no trace of what a third one might be. This gap is
-   carried forward, not closed: a third scoop-risk paper, if one exists,
-   still needs to be identified and verified before this section of the
-   related-work discussion can be considered complete.
+2. ~~Only 2 of the "three scoop-risk papers" originally requested have
+   been supplied and verified.~~ **Closed 2026-08-24, no new citation
+   needed.** The third is `rasquinha2023metric` (already in `refs.bib`
+   for its reproduction-target role): the closest methodological
+   antecedent to this project (same BE metric, same t-Student family),
+   differentiated by scope rather than mechanism or metric -- it studies
+   only per-tensor/per-vector INT8/FP8, never block-scaled microscaling
+   (MXFP4/NVFP4), and contains no analogue of H1's ν* fragility crossing.
+   Full reasoning in `paper/citation_worklist.md`'s "Item, formerly 'not
+   found'" section. The three scoop-risk papers are `rasquinha2023metric`,
+   `fasoli2026finer`, and `egiazarian2026bridging` -- all three already
+   verified and in `refs.bib`.

@@ -3655,3 +3655,51 @@ optional import, skipped if unavailable).
    found'" section. The three scoop-risk papers are `rasquinha2023metric`,
    `fasoli2026finer`, and `egiazarian2026bridging` -- all three already
    verified and in `refs.bib`.
+
+## Paper writing plan (Step 6.2) -- narrative structure
+
+*Recorded 2026-08-24. This is a decision record of author choices made in
+discussion, not a claim requiring external verification -- unlike the
+Step 6.1 entries above, nothing here was fetched or fact-checked, and
+nothing here should be treated as such.*
+
+Draft title (not finalized): "Isolating the Design Choice Behind
+NVFP4's Advantage over MXFP4" -- leads with the causal-decomposition
+finding (Step 4.3) as the paper's headline, deliberately NOT with the
+ν* localization (Step 4.2), per author decision to lead with the
+stronger, more robust result.
+
+Section structure and target lengths (~6 of the workshop's allowed
+2-8 pages):
+
+1. Introduction (~0.75p): NVIDIA's 36%-more-tokens claim (attributed
+   as a vendor claim), the two-confound observation (NVFP4 differs
+   from MXFP4 in BOTH block size and scale format), the causal
+   question as the falsifiable hypothesis. No mention of the ν* pivot
+   here -- introduced only in Results.
+2. Background (~0.5p): compact MXFP4 vs NVFP4 table; classical
+   gamma_n/sqrt(n)*u bounds presented as the starting point (not yet
+   noting they don't apply -- that's Method's job).
+3. Method (~1.5-2p): why the classical bound doesn't apply under exact
+   accumulation, derivation of u_eff/sqrt(n) (Step bounds.py / SPEC.md
+   🧠1), factorial 2x2 design, robust statistical protocol (median/p90
+   confirmatory, p99 indicative -- justified by Step 3.4's bootstrap
+   coverage test).
+4. Results (~2-2.5p), DELIBERATE non-chronological internal order:
+   4a. Mechanism confirmation (Step 4.1 n-scaling fits).
+   4b. LEADS, own subsection: causal decomposition -- scale format
+       dominates block size (Step 4.3).
+   4c. Short, subordinate: the ν* null result (Step 4.2), framed as
+       "why we pivoted from threshold to magnitude", connecting back
+       into 4b's finding.
+5. Validation with real activations (~0.75-1p): Step 4.4, framed as
+   closing validation, including the massive-activations mechanism
+   for the h6 discrepancy.
+6. Related work and limitations (~0.5p): differentiation from
+   rasquinha2023metric (dual role), fasoli2026finer, egiazarian2026bridging;
+   honest limitations (CPU emulation not hardware, E2M1 only,
+   intra-block correlation not fully isolated, c=1 fixed by design).
+7. Conclusion (~0.25p).
+
+Recommended writing order: Method -> Results -> Background ->
+Related work -> Introduction -> Conclusion -> Abstract.

@@ -113,14 +113,13 @@
 \bibliographystyle{plainnat}
 \bibliography{refs}
 
-% TODO: NeurIPS's mandatory paper checklist. The real template requires
-% \input{checklist.tex} here. checklist.tex is part of the official
-% author kit (same source/sync as neurips_2026.sty itself), is NOT
-% present in this repository, and must NOT be fabricated locally --
-% its answers (reproducibility, ethics, broader impact) are substantive,
-% not boilerplate, so an invented or incomplete version would be worse
-% than a visibly missing one. Pull it from the same Overleaf
-% project/template sync that supplies the .sty, then uncomment:
-% \input{checklist.tex}
+% NeurIPS's mandatory paper checklist. checklist.tex now exists in this
+% repository (supplied 2026-08-24 from the official author kit, same
+% source/sync as neurips_2026.sty), so this is wired in -- not
+% fabricated: the file's own content is untouched by this project, only
+% \input here. Its answers (reproducibility, ethics, broader impact)
+% still need to be actually filled in as paper content is written; this
+% \input alone does not answer them.
+\input{checklist.tex}
 
 \end{document}

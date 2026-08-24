@@ -321,6 +321,22 @@ and diverge otherwise; concretely, `amax_b = 7` gives `s_b = 2` here
 implementation deliberately keeps the round-up rule, for the reason
 above.
 
+**Independent corroboration (Step 6.1, 2026-08-24).** NVIDIA's own NVFP4
+pretraining paper (`nvidia2026nvfp4`, arXiv:2509.25149) reports the same
+round-up choice for power-of-two block scale factors in their own training
+practice -- "we typically round decode scale factors up to prevent
+saturations," citing convergence issues observed under the round-down
+default (Mishra et al. 2025) -- for the same saturation-avoidance reason
+given above. This does **not** correct anything in this section: the
+floor/round-down description of the `microxcaling`/OCP MX default immediately
+above is unchanged and remains bit-exact-verified against the actual
+`microxcaling` package (see "Verified against `microxcaling` 1.1.0" below),
+not merely asserted. NVIDIA's paper does not dispute that the OCP MX default
+rounds down; it independently documents choosing to deviate from that
+default in the same direction this project already had, for a convergent
+reason. Recorded here as a citable corroboration of an existing design
+decision, not a fix of an error.
+
 **Verified against `microxcaling` 1.1.0** (`mx` from
 `github.com/microsoft/microxcaling`, run on 2026-08-20 against torch
 2.13.0+cpu in a throwaway venv; `torch` is still absent from this
@@ -3477,10 +3493,18 @@ all.)
 "massive activations" mechanism.** A small, fixed set of channel indices
 (most starkly, index 64 alone) dominates `h6`'s extreme-value tail across
 nearly all 34390 tokens, matching the "massive activations" / "outlier
-feature" pattern reported in the literature on transformer internals (e.g.
-Sun et al. 2024, "Massive Activations in Large Language Models"; Liu et al.
-similarly document persistent per-channel outliers in transformer hidden
-states) rather than generic scattered heavy-tailedness. This is a
+feature" pattern reported in the literature on transformer internals -- Sun
+et al. 2024, "Massive Activations in Large Language Models", which documents
+persistent per-channel outliers in transformer hidden states (Sun, Chen,
+Kolter and Liu; `sun2024massive`) -- rather than generic scattered
+heavy-tailedness. **Correction (Step 6.1, 2026-08-24):** an earlier draft of
+this paragraph cited "Liu et al." here as if it were a second, independent
+source alongside Sun et al. 2024. It is not: Zhuang Liu is the fourth
+co-author of that same paper (confirmed against the paper's own author list
+during reference verification), not a separate work, so the standalone "Liu
+et al." reference has been removed rather than given its own bib entry. This
+is a
+
 **plausible, disclosed explanation for
 the mismatch, not a proven one**: real activations with a few structurally
 fixed extreme channels violate the t-Student model's implicit iid-across-
@@ -3494,3 +3518,117 @@ structure from the kurtosis-matching alone was run, and none is claimed. Had
 the top values instead been scattered across many distinct, changing
 channels, this addendum would have reported that plainly instead and left
 the mismatch unexplained; that is not what was found.
+
+## Step 6.1 -- reference verification
+
+**Status: 10 of 13 supplied bibliographic entries independently verified
+today (2026-08-24) against live primary sources; 2 corrections applied to
+this file; 2 gaps found and left open, not silently resolved.** This section
+records what was checked, what changed, and what did not. `paper/refs.bib`
+is the artifact this verification produced; every entry there carries its
+own dated, source-specific comment.
+
+**7 citations verified with claim-level confirmation** (not just
+existence -- the specific sentence/figure/definition each is cited for was
+fetched and checked against the primary source):
+
+- `nvidia2026nvfp4` (arXiv:2509.25149) -- the "36% more tokens" figure
+  (Fig. 6b), the 8B hybrid Mamba-Transformer model, and the "round decode
+  scale factors up" statement were all confirmed verbatim by fetching the
+  paper's own HTML.
+- `rasquinha2023metric` (arXiv:2408.02897) -- the backward-error formula and
+  the 512x512 t-distribution setup confirmed verbatim; the per-vector (vs.
+  this project's per-tensor) scaling difference confirmed and already
+  correctly disclosed in this document's own "arXiv:2408.02897 reproduction"
+  section.
+- `fasoli2026finer` (arXiv:2601.19026, ICLR 2026) and `egiazarian2026bridging`
+  (arXiv:2509.23202, ICLR 2026) -- both confirmed to exist, be ICLR
+  2026-accepted, and support the scoop-risk differentiation claimed for each
+  (narrow-distribution mechanism for the former; MSE metric + Laplace
+  operand model, Definitions 1 and 3, for the latter, confirmed by fetching
+  the paper's own text).
+- `higham2019new` and `connolly2021stochastic` -- DOIs, volumes and page
+  ranges cross-checked against publisher/indexing records.
+- `sun2024massive` (arXiv:2402.17762) -- author list confirmed, including
+  that Zhuang Liu is this paper's own fourth co-author (see correction
+  below).
+
+**3 standard, low-risk citations for datasets and specifications**
+(existence and authorship/publication confirmed, not claim-level fetched
+against every detail): `radford2019language` (GPT-2), `merity2016pointer`
+(WikiText-2), `ocp2023mx` (the OCP Microscaling Formats spec -- previously
+the least-documented reference in this project, cited nowhere by title or
+URL before this pass).
+
+**3 software/tool citations**, versioned against this project's own
+lockfile where tracked: `mldtypes` (0.6.0, per `requirements.lock`),
+`microxcaling` (1.1.0, per this file's own prose -- not in
+`requirements.lock`, since it is explicitly outside this project's tracked
+dependency set), `torchao` (no version pinned anywhere in this project;
+optional import, skipped if unavailable).
+
+### Corrections applied
+
+1. **"Liu et al." ghost citation, removed.** The Step 4.4 addendum's
+   "Verdict: CONCENTRATED" paragraph cited "Sun et al. 2024" and a
+   separate "Liu et al." as if they were two independent sources. They are
+   not: Zhuang Liu is the fourth co-author of the same Sun et al. 2024
+   paper (confirmed against the paper's own author list). The standalone
+   reference has been removed from that paragraph; see the inline
+   correction note there, dated today. This is the same class of error
+   this project has already documented once before (the "Appendix A"
+   phantom-citation incident logged earlier in this file, in "The controls
+   are not proposals" section) -- an apparent citation that does not
+   resolve to a real, distinct source -- handled the same way: named and
+   removed, not left in place or silently dropped without a trace.
+
+2. **MXFP4 scale-rounding direction -- checked, no error found, nothing
+   changed.** The verification task also asked whether this file's
+   description of `microxcaling`/OCP MX rounding the block-scale exponent
+   *down* was "backwards," on the grounds that NVIDIA's NVFP4 paper
+   states they round scale factors *up*. It is not backwards, and no
+   statement in this file was altered on this point: the floor/round-down
+   description of the `microxcaling` default is not an assertion resting
+   on a citation, but an empirically bit-exact-verified fact about the
+   actual `microxcaling` package (this file's own "Verified against
+   `microxcaling` 1.1.0" section, backed by `tests/test_blocks.py`).
+   NVIDIA's paper does not dispute that the OCP MX default rounds down --
+   it documents choosing to round up in their own training practice, for
+   the same saturation-avoidance reason this project's `quantize_mxfp4`
+   already gives for its own round-up design (see "Why round the exponent
+   up," above). That convergence is genuinely worth recording, so a short
+   "Independent corroboration (Step 6.1)" note citing `nvidia2026nvfp4` was
+   added directly after the `microxcaling` relationship paragraph -- but
+   as a corroborating citation for an already-correct statement, not a
+   correction of an error.
+
+### Open gaps -- not resolved here
+
+1. **The classical `gamma_n` bound (Higham, *Accuracy and Stability of
+   Numerical Algorithms*, 2nd ed., SIAM, 2002) has no entry in
+   `paper/refs.bib`.** This citation is already fully recorded, with
+   author/title/edition/publisher/year, in `src/qgemm/bounds.py`'s own
+   module docstring, and is used in this file's "Theoretical bounds"
+   section and both "Gamma_n sanity check" sections. It was not part of
+   the 13-entry list supplied for this verification pass, so it was not
+   added to `refs.bib` unilaterally -- the supplied list was treated as an
+   explicit, closed scope, not a starting point to extend without
+   confirmation. Under this same Step 6.1 policy ("unverified references
+   are removed from the paper entirely -- no exceptions, no placeholders"),
+   the paper cannot cite `gamma_n` to Higham without a corresponding
+   `refs.bib` entry, so this needs an explicit decision before the paper
+   is finalized. (For what it's worth: this entry would be easy to add and
+   is well-established -- ISBN 0-89871-521-0 / 978-0898715217, DOI
+   10.1137/1.9780898718027, cross-checked today against SIAM's and
+   multiple booksellers' records -- but adding it is a decision left to
+   the author, not made here.)
+2. **Only 2 of the "three scoop-risk papers" originally requested have
+   been supplied and verified.** `fasoli2026finer` and
+   `egiazarian2026bridging` are both confirmed real and on-topic for
+   scoop-risk differentiation (see above). No third paper was included in
+   the bibliographic data supplied for this pass, and `paper/citation_worklist.md`'s
+   original full-text search of this repository's own documents and git
+   history found no trace of what a third one might be. This gap is
+   carried forward, not closed: a third scoop-risk paper, if one exists,
+   still needs to be identified and verified before this section of the
+   related-work discussion can be considered complete.

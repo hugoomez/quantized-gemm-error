@@ -1,0 +1,224 @@
+% paper/refs.bib
+%
+% Step 6.1 policy: every entry below was independently verified today
+% (2026-08-24) by this session via live web search and primary-source
+% fetch (arXiv/publisher pages fetched directly, not taken on the word of
+% any earlier draft or instruction) -- not merely copied from a supplied
+% list. Each comment records what was actually checked and against what.
+% Entries whose supporting claim could not be independently confirmed
+% against a primary source are NOT included here; see
+% paper/citation_worklist.md and SPEC.md's "Step 6.1 -- reference
+% verification" section for what remains open.
+
+% ─────────────────────────── TIER 1 ───────────────────────────
+% Verified 2026-08-24 by direct fetch of the arXiv abstract/HTML page.
+% Supports: PREREGISTRATION.md P3's "NVIDIA's reported 36%-more-tokens
+% gap" and SPEC.md's "Independent corroboration (Step 6.1)" note on
+% MXFP4 scale-exponent round-up. Confirmed verbatim against
+% arxiv.org/html/2509.25149v1: (1) "MXFP4 matches NVFP4 loss when trained
+% on 36% more tokens (i.e., using 1.36T instead of 1T tokens)" (Sec. 5,
+% Fig. 6b caption); (2) the 8B hybrid Mamba-Transformer model (Sec. 5,
+% Appendix A.2); (3) "we typically round decode scale factors up to
+% prevent saturations" citing Mishra et al. 2025 for MXFP8 convergence
+% issues (Sec. 2, Appendix B.4). Cite only as NVIDIA's own reported
+% result (vendor claim), never as independent fact.
+@article{nvidia2026nvfp4,
+  title   = {Pretraining Large Language Models with NVFP4},
+  author  = {{NVIDIA}},
+  journal = {arXiv preprint arXiv:2509.25149},
+  year    = {2025},
+  note    = {v2 2026}
+}
+
+% Verified 2026-08-24 by direct fetch of arxiv.org/abs/2408.02897v1 and
+% arxiv.org/html/2408.02897v1. Supports: qgemm.metrics.backward_error's
+% functional form and SPEC.md's "arXiv:2408.02897 reproduction" section.
+% Confirmed verbatim: backward error "BE = |L.R - Q(L,R)| / (|L|.|R|)"
+% (Sec. IV-A); "matrices of size 512x512 sampled using a t-distribution
+% using a range of normality parameters" (Sec. IV-A). Author order
+% (Rasquinha, then Tabak) and Google affiliation confirmed against the
+% arXiv author list. Venue (ASSYST workshop, ISCA 2023) confirmed by
+% search corroboration, not by fetching workshop proceedings directly.
+% NOTE: the source paper uses PER-VECTOR scaling (Sec. IV-A, confirmed
+% verbatim); this project's own Step 2.2 reproduction
+% (scripts/sanity_reproduce_2408.py) deliberately used PER-TENSOR scaling
+% instead (documented methodological choice, SPEC.md's "arXiv:2408.02897
+% reproduction" section) -- so the reproduction is qualitative-direction
+% only, not an exact replication, and SPEC.md already says so.
+@inproceedings{rasquinha2023metric,
+  title     = {A Metric Driven Approach to Mixed Precision Training},
+  author    = {Rasquinha, Mitchelle and Tabak, Gil},
+  booktitle = {Architecture and System Support for Transformer Models (ASSYST), ISCA},
+  year      = {2023},
+  note      = {arXiv:2408.02897}
+}
+
+% Verified 2026-08-24 by web search corroboration (arXiv listing,
+% OpenReview PDF, IBM Research publication page) confirming the paper
+% exists, is accepted to ICLR 2026, and that its stated finding -- output
+% degradation below a block-size threshold, driven by narrow tensor
+% distributions and limited scale dynamic range -- matches what this
+% entry claims. Author list (Fasoli, Kar, Liu, Venkataramani, Srinivasan,
+% Chang, Wang) confirmed against the search results. Full text was not
+% independently fetched line-by-line beyond the corroborating summaries
+% above; the specific mechanism (narrow distributions, not heavy tails)
+% is the load-bearing claim for scoop-risk differentiation and matches.
+@inproceedings{fasoli2026finer,
+  title     = {Is Finer Better? The Limits of Microscaling Formats in Large Language Models},
+  author    = {Fasoli, Andrea and Kar, Monodeep and Liu, Chi-Chun and Venkataramani, Swagath and Srinivasan, Viji and Chang, Leland and Wang, Naigang},
+  booktitle = {ICLR},
+  year      = {2026},
+  note      = {arXiv:2601.19026, IBM Research}
+}
+
+% Verified 2026-08-24 by direct fetch of arxiv.org/html/2509.23202.
+% Supports scoop-risk differentiation on BOTH stated grounds. Confirmed
+% verbatim: "The per-element MSE: MSE(G) := E[(X1-X1_hat)^2]" (Definition
+% 3, Sec. 3, "Quantization Metrics"); "We assume that the 'native' weights
+% and activations follow the Laplace distribution W ~ Laplace(0,b)..."
+% (Definition 1, Sec. 3, "Modeling"). Both differ from this project's
+% own metric (backward error) and operand model (t-Student), as claimed.
+% Author list and ICLR 2026 status confirmed against arXiv/HuggingFace/
+% dblp listings.
+@inproceedings{egiazarian2026bridging,
+  title     = {Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization},
+  author    = {Egiazarian, Vage and Castro, Roberto L. and Kuznedelev, Denis and Panferov, Andrei and Kurtic, Eldar and Pandit, Shubhra and Marques, Alexandre and Kurtz, Mark and Ashkboos, Saleh and Hoefler, Torsten and Alistarh, Dan},
+  booktitle = {ICLR},
+  year      = {2026},
+  note      = {arXiv:2509.23202}
+}
+
+% Verified 2026-08-24 by web search cross-referencing publisher metadata
+% (SIAM) and Semantic Scholar/ResearchGate records. Volume, page range,
+% and DOI (10.1137/18M1226312) confirmed to match. Supports SPEC.md's
+% "On how to read 'inconsistent with sqrt(n)'" discussion (Gamma_n sanity
+% check section) and PREREGISTRATION.md's discussion of the probabilistic
+% sqrt(n)*u bound this project's exact-accumulation route ultimately
+% supersedes with a decaying u_eff/sqrt(n) form (SPEC.md, "Theoretical
+% bound definition (day 1) -- RESOLVED").
+@article{higham2019new,
+  title   = {A New Approach to Probabilistic Rounding Error Analysis},
+  author  = {Higham, Nicholas J. and Mary, Theo},
+  journal = {SIAM Journal on Scientific Computing},
+  volume  = {41},
+  number  = {5},
+  pages   = {A2815--A2835},
+  year    = {2019},
+  doi     = {10.1137/18M1226312}
+}
+
+% Verified 2026-08-24 by web search cross-referencing publisher metadata
+% (SIAM, DOI resolver) and the MIMS EPrints record. Volume, page range,
+% and DOI (10.1137/20M1334796) confirmed to match. Supports the same
+% SPEC.md/PREREGISTRATION.md sqrt(n)*u discussion as higham2019new above,
+% specifically the stochastic-rounding refinement.
+@article{connolly2021stochastic,
+  title   = {Stochastic Rounding and its Probabilistic Backward Error Analysis},
+  author  = {Connolly, Michael P. and Higham, Nicholas J. and Mary, Theo},
+  journal = {SIAM Journal on Scientific Computing},
+  volume  = {43},
+  number  = {1},
+  pages   = {A566--A585},
+  year    = {2021},
+  doi     = {10.1137/20M1334796}
+}
+
+% Verified 2026-08-24 by web search corroboration (arXiv, HuggingFace
+% paper page, author's own site zicokolter.com/publications). Author list
+% confirmed: Mingjie Sun, Xinlei Chen, J. Zico Kolter, Zhuang Liu -- note
+% Zhuang Liu is the 4th co-author of THIS paper, not a separate work (see
+% correction applied to SPEC.md, "Step 4.4" addendum, below). Supports
+% Step 4.4's channel-concentration finding (SPEC.md, "Verdict:
+% CONCENTRATED").
+@article{sun2024massive,
+  title   = {Massive Activations in Large Language Models},
+  author  = {Sun, Mingjie and Chen, Xinlei and Kolter, J. Zico and Liu, Zhuang},
+  journal = {arXiv preprint arXiv:2402.17762},
+  year    = {2024}
+}
+
+% ─────────────────────────── TIER 2 ───────────────────────────
+% Standard citation, existence/authorship confirmed 2026-08-24 by web
+% search (OpenAI's own PDF, multiple citation databases). Supports: GPT-2
+% ("gpt2" via HuggingFace transformers), used in Step 4.4's real-activation
+% realism check (SPEC.md).
+@article{radford2019language,
+  title   = {Language Models are Unsupervised Multitask Learners},
+  author  = {Radford, Alec and Wu, Jeffrey and Child, Rewon and Luan, David and Amodei, Dario and Sutskever, Ilya},
+  journal = {OpenAI Blog},
+  volume  = {1},
+  number  = {8},
+  year    = {2019}
+}
+
+% Standard citation, existence/authorship confirmed 2026-08-24 by direct
+% fetch of the arXiv abstract page. Supports: WikiText-2
+% (Salesforce/wikitext, wikitext-2-raw-v1 split), used in Step 4.4.
+@article{merity2016pointer,
+  title   = {Pointer Sentinel Mixture Models},
+  author  = {Merity, Stephen and Xiong, Caiming and Bradbury, James and Socher, Richard},
+  journal = {arXiv preprint arXiv:1609.07843},
+  year    = {2016}
+}
+
+% Standard citation, existence confirmed 2026-08-24 by web search
+% (opencompute.org's own document page, OCP's standardization announcement
+% naming AMD/Arm/Intel/Meta/Microsoft/NVIDIA/Qualcomm, September 2023
+% publication date). Supports the MXFP4/E8M0 specification referenced
+% throughout SPEC.md's "Block structure (qgemm.blocks)" section --
+% previously the least-documented entry in this project's citations
+% (referred to only as "the OCP MX specification" with no title/URL
+% recorded anywhere).
+@techreport{ocp2023mx,
+  title       = {OCP Microscaling Formats (MX) Specification Version 1.0},
+  author      = {{Open Compute Project Foundation (MX Alliance)}},
+  institution = {Open Compute Project Foundation},
+  year        = {2023},
+  url         = {https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf}
+}
+
+% ─────────────────────── SOFTWARE / TOOL CITATIONS ───────────────────────
+% Software/tool citation -- version per this repo's own lockfile.
+% requirements.lock (checked 2026-08-24): ml_dtypes==0.6.0. Repository
+% confirmed 2026-08-24 by web search: github.com/jax-ml/ml_dtypes (moved
+% from google/ml_dtypes to the jax-ml org; current canonical location).
+% Supports: the float8/E2M1/bfloat16 bit-exactness reference used
+% throughout SPEC.md's format sections.
+@misc{mldtypes,
+  title        = {ml\_dtypes},
+  author       = {{Google / JAX team}},
+  howpublished = {\url{https://github.com/jax-ml/ml_dtypes}},
+  note         = {Version 0.6.0, as pinned in this project's requirements.lock}
+}
+
+% Software/tool citation -- version per this project's own prose record
+% (not in requirements.lock: microxcaling is explicitly outside this
+% project's tracked dependencies, installed only in a throwaway venv for
+% the one-off Step 1.3 comparison -- see README.md, "Setup"). Version
+% 1.1.0 and the run date (2026-08-20, against torch 2.13.0+cpu) are as
+% recorded in SPEC.md's "Verified against `microxcaling` 1.1.0" section.
+% Repository confirmed 2026-08-24 by web search: github.com/microsoft/microxcaling.
+% Supports: the MXFP4 scale-rounding bit-exactness comparison (SPEC.md,
+% "Relationship to `microxcaling`").
+@misc{microxcaling,
+  title        = {microxcaling},
+  author       = {{Microsoft}},
+  howpublished = {\url{https://github.com/microsoft/microxcaling}},
+  note         = {Version 1.1.0, per SPEC.md; not part of this project's own tracked dependency set (see README.md, "Setup")}
+}
+
+% Software/tool citation. Repository confirmed 2026-08-24 by web search:
+% github.com/pytorch/ao (torchao). NOT pinned anywhere in this project's
+% pyproject.toml or requirements.lock -- checked 2026-08-24, no match in
+% either file. tests/test_blocks.py imports it optionally via
+% pytest.importorskip and skips the comparison test entirely if it is
+% unavailable, so no specific version is "in use" to cite; this is stated
+% here rather than a version guessed. Supports: the NVFP4 golden-reference
+% sanity check (SPEC.md, "Relationship to `torchao`" -- explicitly
+% documented there as "a sanity check, not an authority").
+@misc{torchao,
+  title        = {torchao: PyTorch Architecture Optimization},
+  author       = {{PyTorch}},
+  howpublished = {\url{https://github.com/pytorch/ao}},
+  note         = {No version pinned anywhere in this project's tracked dependencies; optional import, skipped if unavailable (tests/test_blocks.py)}
+}

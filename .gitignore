@@ -9,3 +9,17 @@ dist/
 results/*.parquet
 results/*.config.json
 paper/figures/*.png
+
+# LaTeX build artifacts (paper/main.tex compiles locally against
+# paper/neurips_2026.sty + paper/checklist.tex; only source files are
+# tracked, not pdflatex/bibtex byproducts)
+paper/*.pdf
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.toc

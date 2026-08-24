@@ -1,0 +1,97 @@
+% =====================================================================
+% main.tex -- paper scaffold, content only, NOT compiled or verified.
+%
+% *** READ BEFORE COMPILING OR SUBMITTING ***
+%
+% The request that produced this file said to "use exactly this shell
+% (this is the verified official NeurIPS 2026 template content) ...
+% [PASTE THE FULL VERIFIED .tex CONTENT -- see below]" -- but no .tex
+% content actually followed in that message. This file therefore does
+% NOT reproduce a verified neurips_2026.sty-paired preamble: nothing
+% below the "UNVERIFIED PLACEHOLDER PREAMBLE" marker has been checked
+% against the real template, and this session did not fetch one
+% (media.neurips.cc / overleaf.com are outside the network allowlist,
+% per instruction, and third-party mirrors were explicitly ruled out
+% as untrustworthy).
+%
+% Separately: the instruction to leave the title as a TODO cited
+% "this project's own decided framing, Step 6.2 planning" as the
+% source of the draft candidate title below. No "Step 6.2", no section
+% target-length numbers, and no title-decision discussion of any kind
+% appear anywhere in this session's conversation or in this
+% repository's tracked files/history -- checked (grep across *.md and
+% git log --all) before writing this file, not assumed. The candidate
+% title is included below exactly as given, clearly marked TODO and
+% not finalized, but its stated provenance could not be confirmed and
+% is flagged here rather than silently repeated as fact.
+%
+% Before this file is used for real compilation or submission:
+%   1. Open the official Overleaf template (linked from the workshop's
+%      own CFP): https://www.overleaf.com/project/new/template/51698
+%   2. Replace everything between the two "UNVERIFIED PLACEHOLDER
+%      PREAMBLE" markers below with that template's actual preamble,
+%      verbatim -- do not hand-adjust it to match this file's guesses.
+%   3. Keep the configuration lines below the second marker
+%      (\usepackage[dblblindworkshop]{neurips_2026}'s options,
+%      \workshoptitle, the \title TODO, the \author TODO, the
+%      \input list, and \bibliography{refs}) -- those were specified
+%      directly in the request, not reconstructed from general
+%      knowledge, so they carry no such caveat.
+% =====================================================================
+
+% ----------------- UNVERIFIED PLACEHOLDER PREAMBLE ------------------
+% Generic LaTeX article skeleton with packages commonly bundled
+% alongside NeurIPS-family style files, reconstructed from general
+% knowledge, NOT fetched or verified this session. Replace per the
+% instructions above.
+\documentclass{article}
+
+\usepackage[dblblindworkshop]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{natbib}
+\bibliographystyle{plainnat} % guessed convention; confirm against the real template
+% -------------- END UNVERIFIED PLACEHOLDER PREAMBLE ------------------
+
+\workshoptitle{New in ML at NeurIPS 2026}
+
+% TODO: finalize title -- draft candidate: "Isolating the Design Choice
+% Behind NVFP4's Advantage over MXFP4". This is NOT a finalized title;
+% do not finalize without human review. (Provenance note: the request
+% that supplied this candidate attributed it to "this project's own
+% decided framing, Step 6.2 planning" -- no such planning discussion
+% was found anywhere in this session or this repository when checked;
+% see this file's header note above.)
+\title{}
+
+% Double-blind submission (dblblindworkshop): anonymous author block.
+% TODO: once the real preamble (see header note above) is in place,
+% use NeurIPS's own placeholder-author macro/text from that template.
+% Left empty here rather than inventing placeholder names not provided
+% by the actual template.
+\author{}
+
+\begin{document}
+
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_background}
+\input{sections/03_method}
+\input{sections/04_results}
+\input{sections/05_validation}
+\input{sections/06_related_work}
+\input{sections/07_conclusion}
+
+\bibliography{refs}
+
+\end{document}

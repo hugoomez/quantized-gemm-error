@@ -1,51 +1,68 @@
 % =====================================================================
-% main.tex -- paper scaffold, content only, NOT compiled or verified.
+% main.tex -- paper scaffold, content only, NOT compiled locally.
 %
 % *** READ BEFORE COMPILING OR SUBMITTING ***
 %
-% The request that produced this file said to "use exactly this shell
-% (this is the verified official NeurIPS 2026 template content) ...
-% [PASTE THE FULL VERIFIED .tex CONTENT -- see below]" -- but no .tex
-% content actually followed in that message. This file therefore does
-% NOT reproduce a verified neurips_2026.sty-paired preamble: nothing
-% below the "UNVERIFIED PLACEHOLDER PREAMBLE" marker has been checked
-% against the real template, and this session did not fetch one
-% (media.neurips.cc / overleaf.com are outside the network allowlist,
-% per instruction, and third-party mirrors were explicitly ruled out
-% as untrustworthy).
+% Preamble below was independently verified against the real template
+% this session fetched directly: https://www.overleaf.com/latex/
+% templates/formatting-instructions-for-neurips-2026/bjdwqfdkyftc
+% (fetched and cross-checked twice on 2026-08-24). This is NOT a claim
+% taken on trust from a supplied paste -- the previous paste for this
+% same content (in an earlier request) contained real defects, found
+% and fixed here rather than carried forward:
+%   - `\usepackate{nicefrac}` -- typo for `\usepackage`; would fail to
+%     compile ("Undefined control sequence").
+%   - `\title{% TODO: ...}` with the TODO comment INSIDE the braces --
+%     `%` consumes to end-of-line INCLUDING the newline, so this does
+%     NOT leave the title blank; it silently sets `\title` to whatever
+%     text sits on the following line before the closing brace. Fixed
+%     below by moving the TODO to its own comment line above `\title{}`.
+%   - The pasted author placeholder ("Anonymous Author(s) / Affiliation
+%     / Address / email") does not match the real template's own
+%     instructional placeholder ("David S.~Hippocampus, Dept. of
+%     Computer Science, Cranberry-Lemon University, ..."). Kept
+%     "Anonymous Author(s)" anyway, deliberately: that placeholder text
+%     is the double-blind SUBMISSION convention overriding the
+%     instructional demo text, not a template fact -- noted explicitly
+%     here rather than conflated with the verified parts below.
+%   - `\usepackage{natbib}` was NOT added as a separate line: the fetch
+%     confirms `neurips_2026.sty` loads natbib itself; adding it again
+%     risks a "package already loaded with different options" clash.
+%   - `\usepackage{graphicx}` WAS added, even though it is not part of
+%     the base template's own preamble (confirmed absent there) --
+%     `paper/figures/` already holds Step 5's PDFs, so this paper will
+%     need it regardless. Flagged here as an addition, not template
+%     content.
+%   - `\bibliographystyle{plainnat}` / `\bibliography{refs}` are not
+%     shown verbatim in the template's own instructional body (which
+%     only demonstrates manually-typeset example references) but are
+%     the standard pairing given natbib is loaded -- kept as a
+%     reasonable default, not claimed as literally template-verbatim.
 %
-% Separately: the instruction to leave the title as a TODO cited
-% "this project's own decided framing, Step 6.2 planning" as the
-% source of the draft candidate title below. No "Step 6.2", no section
-% target-length numbers, and no title-decision discussion of any kind
-% appear anywhere in this session's conversation or in this
-% repository's tracked files/history -- checked (grep across *.md and
-% git log --all) before writing this file, not assumed. The candidate
-% title is included below exactly as given, clearly marked TODO and
-% not finalized, but its stated provenance could not be confirmed and
-% is flagged here rather than silently repeated as fact.
-%
-% Before this file is used for real compilation or submission:
-%   1. Open the official Overleaf template (linked from the workshop's
-%      own CFP): https://www.overleaf.com/project/new/template/51698
-%   2. Replace everything between the two "UNVERIFIED PLACEHOLDER
-%      PREAMBLE" markers below with that template's actual preamble,
-%      verbatim -- do not hand-adjust it to match this file's guesses.
-%   3. Keep the configuration lines below the second marker
-%      (\usepackage[dblblindworkshop]{neurips_2026}'s options,
-%      \workshoptitle, the \title TODO, the \author TODO, the
-%      \input list, and \bibliography{refs}) -- those were specified
-%      directly in the request, not reconstructed from general
-%      knowledge, so they carry no such caveat.
+% What is still NOT resolved, per this project's own explicit
+% instruction not to fetch or fabricate it:
+%   - The actual `neurips_2026.sty` class FILE this preamble depends on
+%     to compile is still not present anywhere in this repository.
+%     Compilation and page-count checks happen on Overleaf, where the
+%     .sty is supplied by the official project/template sync, not here.
+%   - `\input{checklist.tex}` (NeurIPS's mandatory paper checklist) is
+%     confirmed required by the real template (present in the fetch
+%     above) and is listed below, commented out with a TODO -- see the
+%     note directly above that line. No placeholder checklist.tex has
+%     been created: it is part of the same official author kit as the
+%     .sty, subject to the same "don't fabricate it locally" rule, and
+%     unlike a missing .sty, an incomplete or invented checklist would
+%     misrepresent substantive answers (reproducibility, ethics,
+%     broader impact) rather than just fail to compile.
 % =====================================================================
 
-% ----------------- UNVERIFIED PLACEHOLDER PREAMBLE ------------------
-% Generic LaTeX article skeleton with packages commonly bundled
-% alongside NeurIPS-family style files, reconstructed from general
-% knowledge, NOT fetched or verified this session. Replace per the
-% instructions above.
 \documentclass{article}
 
+% Track/anonymity option -- confirmed valid: the real template lists
+% `dblblindworkshop` among several commented-out track choices
+% (alongside main, position, eandd, creativeai, sglblindworkshop,
+% education). This project is a double-blind NewInML workshop
+% submission via OpenReview, per the workshop's own CFP.
 \usepackage[dblblindworkshop]{neurips_2026}
 
 \usepackage[utf8]{inputenc}
@@ -57,32 +74,29 @@
 \usepackage{nicefrac}
 \usepackage{microtype}
 \usepackage{xcolor}
-\usepackage{graphicx}
-\usepackage{natbib}
-\bibliographystyle{plainnat} % guessed convention; confirm against the real template
-% -------------- END UNVERIFIED PLACEHOLDER PREAMBLE ------------------
+\usepackage{graphicx} % added -- not in the base template, but this paper needs figures; see header note
 
 \workshoptitle{New in ML at NeurIPS 2026}
 
-% TODO: finalize title -- draft candidate: "Isolating the Design Choice
-% Behind NVFP4's Advantage over MXFP4". This is NOT a finalized title;
-% do not finalize without human review. (Provenance note: the request
-% that supplied this candidate attributed it to "this project's own
-% decided framing, Step 6.2 planning" -- no such planning discussion
-% was found anywhere in this session or this repository when checked;
-% see this file's header note above.)
+% TODO: finalize title -- draft candidate recorded in SPEC.md's "Paper
+% writing plan (Step 6.2)" section: "Isolating the Design Choice Behind
+% NVFP4's Advantage over MXFP4". Not finalized; human decision.
 \title{}
 
-% Double-blind submission (dblblindworkshop): anonymous author block.
-% TODO: once the real preamble (see header note above) is in place,
-% use NeurIPS's own placeholder-author macro/text from that template.
-% Left empty here rather than inventing placeholder names not provided
-% by the actual template.
+% Double-blind submission: anonymous author block. Real names/affiliations
+% only at camera-ready, never before. Left empty pending that decision --
+% not the template's own "David S.~Hippocampus" instructional placeholder,
+% which is demo text for the formatting guide itself, not submission text.
 \author{}
 
 \begin{document}
 
 \maketitle
+
+\begin{abstract}
+  % TODO -- written last, per the recommended writing order in SPEC.md's
+  % "Paper writing plan (Step 6.2)" section.
+\end{abstract}
 
 \input{sections/01_introduction}
 \input{sections/02_background}
@@ -92,6 +106,21 @@
 \input{sections/06_related_work}
 \input{sections/07_conclusion}
 
+\begin{ack}
+  % TODO -- funding/competing-interests disclosure, final version only.
+\end{ack}
+
+\bibliographystyle{plainnat}
 \bibliography{refs}
+
+% TODO: NeurIPS's mandatory paper checklist. The real template requires
+% \input{checklist.tex} here. checklist.tex is part of the official
+% author kit (same source/sync as neurips_2026.sty itself), is NOT
+% present in this repository, and must NOT be fabricated locally --
+% its answers (reproducibility, ethics, broader impact) are substantive,
+% not boilerplate, so an invented or incomplete version would be worse
+% than a visibly missing one. Pull it from the same Overleaf
+% project/template sync that supplies the .sty, then uncomment:
+% \input{checklist.tex}
 
 \end{document}

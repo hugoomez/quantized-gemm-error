@@ -1,5 +1,221 @@
 % =====================================================
-% Method — target length: TBD (no prior chat discussion on
-% record establishing this — see main.tex header note).
-% NOT YET WRITTEN.
+% Method — target length ~1.5-2 pages, per SPEC.md's
+% "Paper writing plan (Step 6.2) -- narrative structure".
+%
+% Every number, formula and design fact below is taken from
+% SPEC.md, PREREGISTRATION.md, src/qgemm/bounds.py,
+% src/qgemm/metrics.py and configs/sweep_main.yaml. No results
+% are previewed here (Steps 4.1-4.4 belong to Section 4).
+%
+% Notation note: SPEC.md calls the derived bound `cota(n)`.
+% Rendered here as \beta(n) -- an English-language paper should
+% not carry the Spanish word untranslated. Same object, renamed
+% only for the write-up.
+%
+% Base LaTeX math only (\[ \], equation, \frac, \sqrt, \mathrm):
+% main.tex does not load amsmath, and this file deliberately does
+% not require it.
 % =====================================================
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Setup: backward error under exact accumulation}
+\label{sec:method:setup}
+
+The measurement instrument is a quantized GEMM. For operands $A \in
+\mathbb{R}^{M \times n}$ and $B \in \mathbb{R}^{n \times N}$, both are quantized
+with a block-scaled low-precision format along the contraction dimension $n$,
+and the resulting float64 \emph{reconstructions} --- the dequantized values, not
+the integer codes --- are multiplied. Accuracy is reported elementwise as the
+backward error \citep{rasquinha2023metric}
+\begin{equation}
+  \mathrm{BE}_{ij} \;=\; \frac{\bigl|(AB)_{ij} - \hat{C}_{ij}\bigr|}
+                              {\bigl(|A|\,|B|\bigr)_{ij}},
+  \label{eq:be}
+\end{equation}
+with $\hat{C}$ the quantized product and $|\cdot|$ elementwise. The denominator
+uses the product of absolute values, not $|AB|$; the two differ whenever the
+exact product involves cancellation.
+
+The primary route accumulates the reconstructions \emph{exactly}, in float64 ---
+a design choice, not an implementation convenience. A low-precision GEMM has two
+independent error sources, operands snapped onto a coarse grid and partial sums
+rounded in a narrow accumulator, and they compose, so a number measured with
+both active cannot be attributed to either. Under exact accumulation the only
+remaining approximation is quantization of the inputs, so the residual
+$\hat{C} - AB$ \emph{is} the input-quantization error and (\ref{eq:be}) isolates
+it. A bfloat16 accumulator exists as a deliberate secondary ablation, outside
+the grid analysed here and never mixed into a headline result.
+
+Operands have i.i.d.\ t-Student($\nu$) entries --- smaller $\nu$ meaning heavier
+tails, $\nu \to \infty$ the Gaussian case --- and each tensor is normalized as a
+whole to unit median absolute deviation, rather than unit standard deviation,
+which is undefined for the $\nu \le 2$ part of the grid. Every cell uses the
+shape $(64,n) \times (n,64)$.
+
+\subsection{Why the classical bound does not transfer}
+\label{sec:method:classical}
+
+The classical worst-case backward-error bound for a length-$n$ inner product is
+$\gamma_n = nu/(1-nu)$ at unit roundoff $u$ \citep{higham2002accuracy};
+probabilistic analyses relax the leading factor to $\sqrt{n}\,u$, or
+$\sqrt{n \log n}\,u$ for a refined variant, as a high-probability upper bound
+rather than a claim about typical growth
+\citep{higham2019new,connolly2021stochastic}.
+
+Neither transfers here, for a mechanistic reason. The $n$-dependence of both
+families arises specifically from \emph{repeated rounding during accumulation}:
+one rounding per summation step, $n$ of them, compounding either in the worst
+case ($\gamma_n$) or as a random walk ($\sqrt{n}\,u$). Under exact accumulation
+that mechanism is not physically present in the pipeline, so whatever
+$n$-dependence the measured error has, it cannot be the one those bounds
+describe. A block-scaled format also offers no fixed $u$ to substitute: the
+classical unit roundoff is half an ulp of a grid fixed by the encoding, whereas
+the grid an element lands on here is set by the largest magnitude in \emph{its
+own block}, making the achieved relative error a distribution rather than a
+property of the format.
+
+\subsection{A measured unit roundoff, and the bound built from it}
+\label{sec:method:bound}
+
+The quantity replacing $u$ is measured directly. For a given element format,
+block size, scale format and tail index $\nu$, define
+\begin{equation}
+  u_{\mathrm{eff}}(\mathrm{format}, \mathrm{block}, \nu)
+  \;=\; \mathrm{median}_{\,i}\;
+        \frac{\bigl|x_i - \hat{x}_i\bigr|}{\bigl|x_i\bigr|},
+  \label{eq:ueff}
+\end{equation}
+the median per-element relative quantization error: draw samples from that
+$\nu$, quantize under that configuration, read the median off the resulting
+distribution. Its $99$th percentile is recorded alongside. Estimation uses an
+independent calibration draw, seeded from a separate stream, so the denominator
+of the ratio tested below is never calibrated on the sample it is tested against.
+
+One choice inside (\ref{eq:ueff}) is load-bearing. Relative error is ill-defined
+as $x_i \to 0$, and ``near zero'' means something only relative to an element's
+own effective scale $s_{\mathrm{eff}}$ (block scale times global scale, where
+one is used), since block scales span many orders of magnitude across a
+heavy-tailed tensor. Elements with $|x_i| \le 0.25\,s_{\mathrm{eff}}$ are
+therefore excluded. The threshold is not tuned: E2M1's smallest nonzero
+magnitude is $0.5\,s_{\mathrm{eff}}$, so under round-to-nearest every element at
+or below $0.25\,s_{\mathrm{eff}}$ quantizes to exactly zero with relative error
+exactly $1$, recording the format's dynamic-range floor rather than its
+precision. That the cut is necessary was checked, not assumed: with it disabled,
+all $32$ measured configurations return $p_{99} = 1.00000$ exactly. Its price is
+a large, configuration-dependent exclusion --- surviving fractions range from
+$0.360$ (MXFP4 at $\nu=1$) to $0.932$ (NVFP4 at the Gaussian end) --- tabulated
+wherever $u_{\mathrm{eff}}$ is reported.
+
+Under exact accumulation the error at output entry $(i,j)$ is a sum of $n$
+one-time input-quantization errors of essentially random sign, so partial
+cancellation makes it grow like $\sqrt{n}$ rather than $n$, while the
+denominator of (\ref{eq:be}), $\sum_k |A_{ik}|\,|B_{kj}|$, sums $n$ strictly
+positive terms and grows approximately linearly for well-behaved inputs.
+Together these give $\mathrm{BE} \sim \sqrt{n}\,u_{\mathrm{eff}}/n$, and hence
+the tested bound
+\begin{equation}
+  \beta(n, \mathrm{format}, \mathrm{block}, \nu)
+  \;=\; c \cdot
+  \frac{u_{\mathrm{eff}}(\mathrm{format}, \mathrm{block}, \nu)}{\sqrt{n}},
+  \label{eq:bound}
+\end{equation}
+which \emph{decays} in $n$ instead of growing. This is an order-of-magnitude
+argument of the central-limit\slash law-of-large-numbers kind, not a proven
+tight inequality, and is not offered as a theoretical contribution: both
+premises --- a mean-zero numerator averaging like a random walk, a denominator
+obeying a law of large numbers --- require moments the heaviest tails swept here
+lack, and at $\nu=1$ (Cauchy) the derivation is expected to break down. That is
+a limit of its assumptions, not a defect in the form of (\ref{eq:bound}).
+
+The constant $c$ is fixed a priori at $c=1$ for all confirmatory analysis, per
+the anti-circularity principle of this study's preregistration: a bound whose
+constant is fitted to the same data it is tested against cannot be falsified by
+that data. Keeping a unit leading constant follows the precedent of
+probabilistic rounding analyses, which substitute $\sqrt{n}\,u$ for the
+deterministic factor $nu$ without introducing a fitted constant
+\citep{connolly2021stochastic}. Since the derivation is order-of-magnitude
+rather than tight, a poorly calibrated $c=1$ is itself a reportable finding
+rather than grounds to re-fit; any $\hat{c}$ estimated from data stays
+descriptive and exploratory, never substituted back into the confirmatory ratio.
+
+The bound is declared broken at $(\mathrm{format},\nu,n)$ when the lower end of
+the $95\%$ bootstrap confidence interval of the median of $\mathrm{BE}/\beta(n)$
+exceeds $1.0$: when error decays reliably more slowly than the cancellation rate
+predicts, not when it exceeds a growing worst-case ceiling. Because
+$u_{\mathrm{eff}}$ is itself indexed by $\nu$, both sides of the ratio move with
+$\nu$, so this tests whether the \emph{scaling law} survives heavy tails, not
+whether heavy tails increase absolute error.
+
+\subsection{Factorial design}
+\label{sec:method:design}
+
+MXFP4 and NVFP4 differ in \emph{both} block size and scale format at once, so
+any difference measured between the presets is unattributable --- block, scale
+format, or interaction. The design crosses the two factors, block size $\in
+\{16,32\}$ against scale format $\in \{\mathrm{E8M0},\mathrm{E4M3}\}$, so either
+can be held fixed while the other varies; this $2 \times 2$ is the causal core.
+The element format is E2M1 everywhere, since both real formats store E2M1 and
+fixing it makes the scaling the only thing that varies. Use of a per-tensor
+global scale is derived from the scale format rather than swept: E8M0 spans
+$255$ binades and reaches any block's magnitude unaided, while E4M3 spans about
+$19$ and overflows to NaN without one.
+
+Two of the four combinations are real formats: block $32$ with an E8M0 scale is
+MXFP4, block $16$ with an E4M3 scale is NVFP4. \textbf{The other two --- block
+$16$ with E8M0, and block $32$ with E4M3 --- are experimental controls.} They
+correspond to no hardware, no specification and no vendor format, and exist
+solely as measurement instruments that make the comparison between the two real
+formats separable. Nothing here proposes, endorses or benchmarks them as
+formats, and results tables keep the distinction visible.
+
+Rounding mode (round-to-nearest-even or stochastic) and a random Hadamard
+transform (on or off) are secondary factors, not part of the causal core. The
+transform is applied per block along the contraction dimension with the same
+random signs on both operands, so it cancels inside every inner product and
+needs no inversion, spreading a block's energy so a lone outlier no longer sets
+the block scale. Per block by design: a global, whole-row transform spreads by
+$\sqrt{n}$, tying its effect to the same $n$ whose scaling law this study sweeps.
+
+These four factors are crossed with the tail index, which runs over
+$\nu \in \{1,2,3,5,8,15,30\}$ together with the Gaussian limit, and with the
+contraction dimension $n \in \{16,64,256,1024,4096\}$, for a grid of
+$8 \times 5 \times 2^4 = 640$ cells, all with exact accumulation. The primary contraction
+dimension is fixed in advance at $n=4096$, closest to real GEMM shapes in
+language-model workloads; the other four are robustness checks, reported as a
+disclosed sensitivity table and never substituted for it. Trial counts are
+adaptive: $5000$ per cell at $\nu \in \{1,2,3\}$, where quantile estimates are
+noisiest and the bound is most likely to break, and $1000$ per cell for the
+lighter tails, for a total of $1.6$ million trials. Three per-tensor formats
+(FP8-E4M3, FP8-E5M2 and INT8) are swept over the same $\nu$ grid at
+$n \in \{16,256,4096\}$ as context baselines, outside the factorial and outside
+every confirmatory comparison.
+
+\subsection{Robust statistical protocol}
+\label{sec:method:stats}
+
+Each trial contributes a summary of its own $M \times N$ backward-error matrix,
+and the \emph{trial} is the resampling unit throughout --- never the individual
+matrix element, since elements within a block share a scale factor, are not
+exchangeable, and would give anticonservative intervals that inflate the
+measured break rate. Confidence intervals use the percentile bootstrap,
+$B = 10{,}000$ resamples, an explicitly seeded generator, and are reported as
+computed rather than forced symmetric.
+
+The median and $90$th percentile carry all confirmatory statistical weight; the
+$99$th percentile is reported for every cell but is indicative only, at any
+trial count used here. The justification is a measured coverage gap, not a
+generic warning that percentile bootstraps can be unreliable. A cell's $p_{99}$
+is set by roughly its top $1\%$ of values ($10$ of $1000$ trials, $50$ of
+$5000$), and a percentile bootstrap resamples with replacement from the observed
+sample, so it can reweight those values but never produce one more extreme than
+the largest already drawn. A coverage simulation quantifies this --- $1000$
+simulated experiments per cell, t-Student($\nu=2$), both trial budgets, nominal
+$95\%$: median coverage is $95.5\%$ at $1000$ trials and $94.8\%$ at $5000$,
+close to nominal at both, while $p_{99}$ coverage is $92.7\%$ and $94.0\%$,
+below the median's at both budgets and roughly $3.5$ standard errors below
+nominal at $1000$ trials. The gap is real and directionally as the mechanism
+predicts, but modest rather than a collapse; more trials measurably help
+$p_{99}$ without closing it, which is why the indicative-only status holds at
+every trial count rather than below some threshold.

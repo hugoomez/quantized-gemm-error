@@ -321,21 +321,46 @@ and diverge otherwise; concretely, `amax_b = 7` gives `s_b = 2` here
 implementation deliberately keeps the round-up rule, for the reason
 above.
 
-**Independent corroboration (Step 6.1, 2026-08-24).** NVIDIA's own NVFP4
-pretraining paper (`nvidia2026nvfp4`, arXiv:2509.25149) reports the same
-round-up choice for power-of-two block scale factors in their own training
-practice -- "we typically round decode scale factors up to prevent
-saturations," citing convergence issues observed under the round-down
-default (Mishra et al. 2025) -- for the same saturation-avoidance reason
-given above. This does **not** correct anything in this section: the
-floor/round-down description of the `microxcaling`/OCP MX default immediately
-above is unchanged and remains bit-exact-verified against the actual
-`microxcaling` package (see "Verified against `microxcaling` 1.1.0" below),
-not merely asserted. NVIDIA's paper does not dispute that the OCP MX default
-rounds down; it independently documents choosing to deviate from that
-default in the same direction this project already had, for a convergent
-reason. Recorded here as a citable corroboration of an existing design
-decision, not a fix of an error.
+**Three conventions in the literature, not two (Step 6.1, 2026-08-24).**
+The floor/round-down description immediately above is unchanged and stays
+exactly as tested -- bit-exact-verified against the actual `microxcaling`
+package (see "Verified against `microxcaling` 1.1.0" below), not merely
+asserted. What follows is additional context on where else this exponent
+gets rounded differently, each independently verified against its primary
+source and cited accordingly:
+
+1. **`microxcaling`/OCP default: `floor(log2(amax_b))`.** As above --
+   verified bit-exact against the reference package (Step 1.3).
+2. **This project's own choice: round up**, `ceil(log2(amax_b/6))`, to
+   guarantee the block max never saturates (see "Why round the exponent
+   up," above). Independently corroborated, not merely coincidentally
+   matched, by NVIDIA's own NVFP4 pretraining paper
+   (`nvidia2026nvfp4`, arXiv:2509.25149): "we typically round decode scale
+   factors up to prevent saturations," citing convergence issues observed
+   under the round-down default (Mishra et al. 2025) for the same
+   saturation-avoidance reason given here.
+3. **A third convention: round-to-nearest plus a 4/3 rescaling
+   correction**, used by Tseng, Yu and Park 2025 (`tseng2025training`,
+   arXiv:2502.20586, "Training LLMs with MXFP4") and adopted by Egiazarian
+   et al. 2026 (`egiazarian2026bridging`, arXiv:2509.23202, Appendix H,
+   Eq. 1): `s_E8M0 = (4/3) * 2 ** clamp(round(log2(s)), -128, 127)`.
+   Egiazarian et al. state this "yields an unbiased estimate of the
+   original scale and reduces quantization error" (their Sec. 3/Appendix C,
+   citing Tseng et al. 2025 for the 4/3 factor) -- a bias-correction
+   motivation distinct from both (1)'s and (2)'s worst-case/saturation
+   framing. Confirmed by direct fetch of the paper's own PDF: Appendix H
+   ("MXFP SCALE FITTING") states "The original MXFP quantization grid, with
+   4/3 re-scaling, quantizes scales as follows" immediately above the
+   numbered equation, and a separate passage states "we multiply the scale
+   by 4/3 following [52]," where reference [52] in that paper's own
+   bibliography is Tseng, Yu and Park 2025.
+
+None of the three is "the" correct convention independent of context: (1)
+is a spec default this project deliberately does not use, (2) targets the
+worst case (the block's largest element never saturates), and (3) targets
+the average case (an unbiased scale estimate, at the cost of the round-up
+guarantee). This project's own choice remains (2), for the reasons given
+above; (1) and (3) are recorded here as literature context, not adopted.
 
 **Verified against `microxcaling` 1.1.0** (`mx` from
 `github.com/microsoft/microxcaling`, run on 2026-08-20 against torch

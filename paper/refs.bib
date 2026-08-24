@@ -71,21 +71,50 @@
   note      = {arXiv:2601.19026, IBM Research}
 }
 
-% Verified 2026-08-24 by direct fetch of arxiv.org/html/2509.23202.
+% Verified 2026-08-24 by direct fetch of arxiv.org/html/2509.23202 and,
+% for the MXFP scale-fitting claim below, by downloading and extracting
+% text from the paper's own PDF (arxiv.org/pdf/2509.23202) since the
+% relevant appendix was not rendered by the HTML fetch.
 % Supports scoop-risk differentiation on BOTH stated grounds. Confirmed
 % verbatim: "The per-element MSE: MSE(G) := E[(X1-X1_hat)^2]" (Definition
 % 3, Sec. 3, "Quantization Metrics"); "We assume that the 'native' weights
 % and activations follow the Laplace distribution W ~ Laplace(0,b)..."
 % (Definition 1, Sec. 3, "Modeling"). Both differ from this project's
 % own metric (backward error) and operand model (t-Student), as claimed.
-% Author list and ICLR 2026 status confirmed against arXiv/HuggingFace/
-% dblp listings.
+% ALSO supports SPEC.md's three-conventions rounding note (Step 6.1):
+% confirmed verbatim in Appendix H ("MXFP SCALE FITTING"), Eq. (1):
+% "s_E8M0 = (4/3) * 2^clamp(round(log2 s), -128, 127)", introduced as
+% "The original MXFP quantization grid, with 4/3 re-scaling, quantizes
+% scales as follows"; and separately, "we multiply the scale by 4/3
+% following [52], which yields an unbiased estimate of the original scale
+% and reduces quantization error" (Sec. 3/Appendix C), where reference
+% [52] in this paper's own bibliography is confirmed to be
+% `tseng2025training` below. Author list and ICLR 2026 status confirmed
+% against arXiv/HuggingFace/dblp listings.
 @inproceedings{egiazarian2026bridging,
   title     = {Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization},
   author    = {Egiazarian, Vage and Castro, Roberto L. and Kuznedelev, Denis and Panferov, Andrei and Kurtic, Eldar and Pandit, Shubhra and Marques, Alexandre and Kurtz, Mark and Ashkboos, Saleh and Hoefler, Torsten and Alistarh, Dan},
   booktitle = {ICLR},
   year      = {2026},
   note      = {arXiv:2509.23202}
+}
+
+% Verified 2026-08-24 by web search (arXiv listing, Cornell/AWS
+% affiliation) confirming the paper exists with this exact title and
+% author order, and by direct fetch of egiazarian2026bridging's own PDF,
+% whose reference list entry [52] reads "Albert Tseng, Tao Yu, and
+% Youngsuk Park. Training llms with mxfp4, 2025. URL
+% https://arxiv.org/abs/2502.20586" -- confirming this is the paper
+% egiazarian2026bridging cites for its 4/3 scale-rescaling correction.
+% Supports: SPEC.md's three-conventions MXFP4/E8M0 scale-rounding note
+% (Step 6.1), convention 3 (round-to-nearest plus 4/3 bias correction, as
+% opposed to microxcaling/OCP's floor or this project's/NVIDIA's
+% round-up).
+@article{tseng2025training,
+  title   = {Training LLMs with MXFP4},
+  author  = {Tseng, Albert and Yu, Tao and Park, Youngsuk},
+  journal = {arXiv preprint arXiv:2502.20586},
+  year    = {2025}
 }
 
 % Verified 2026-08-24 by web search cross-referencing publisher metadata

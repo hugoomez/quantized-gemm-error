@@ -43,6 +43,23 @@ are visible before the verification pass rather than silently filled in here.
 - **Used in:** `SPEC.md`, "The log-log slope, and why it does not need
   re-litigating here" → "On how to read 'inconsistent with sqrt(n)' above"
   (Gamma_n sanity check section)
+- **⚠ CORRECTION (2026-08-25) — the claim as recorded above is
+  misattributed.** The "Claim" bullet is left standing as the record of what
+  this project's documents asserted at Step 6.1 time; it is not what the
+  sources say. Claim-level checking (triggered while drafting the paper's
+  Background section) established the correct pairing:
+  **Higham & Mary (2019) = `sqrt(n log n)*u`**, a general-case
+  high-probability bound under a mean-independence model of the rounding
+  errors; **Connolly-Higham-Mary (2021) = `sqrt(n)*u`**, no log factor,
+  unconditional, specific to **stochastic rounding**. The two are different
+  bounds for different rounding regimes — `sqrt(n log n)` is *not* "a refined
+  variant" of `sqrt(n)*u`; if anything the Connolly et al. bound is the
+  tighter and later result. `SPEC.md` has been corrected (see its
+  "Misattribution of the two probabilistic bounds" entry under Step 6.1
+  "Corrections applied"). Note that `paper/refs.bib`'s comments for both
+  entries never mention a log factor, and describe `connolly2021stochastic`
+  as "specifically the stochastic-rounding refinement" — consistent with the
+  corrected attribution, so no `refs.bib` change is required.
 
 ## 3. MX / OCP microscaling specification
 

@@ -997,11 +997,25 @@ the same flat pattern. The full table (`median_be`, `p99_be`, `max_be`,
 `sanity_gamma_n_8fe43f31978e_summary.parquet`; the figure is
 `sanity_gamma_n_8fe43f31978e_slope.png`.
 
-**On how to read "inconsistent with sqrt(n)" above.** Higham & Mary (2019)
-and Connolly-Higham-Mary (2021) establish `sqrt(n)*u` (respectively
-`sqrt(n log n)*u` for the refined variant) as a **high-probability upper
-bound** on sequential-summation error under random rounding -- not a
-statement about the typical or expected growth rate. The script's raw
+**On how to read "inconsistent with sqrt(n)" above.** Two distinct
+probabilistic results sit behind that phrase, and neither is a refined
+version of the other. Higham & Mary (2019) replace `gamma_n` by a relaxed
+constant of order `sqrt(n log n)*u`, holding with a probability bounded
+below, for rounding errors modelled as mean-independent random variables --
+the general-case result, and the one that covers RTNE under that modelling
+assumption. Connolly-Higham-Mary (2021) prove a `sqrt(n)*u` bound with no
+log factor, unconditionally, but specifically for **stochastic rounding**,
+whose rounding errors are unbiased by construction. Both are
+**high-probability upper bounds** on sequential-summation error -- not
+statements about the typical or expected growth rate. This gate measures
+both rounding modes, so both results are in scope.
+
+> **Correction (2026-08-25).** This paragraph previously read "Higham &
+> Mary (2019) and Connolly-Higham-Mary (2021) establish `sqrt(n)*u`
+> (respectively `sqrt(n log n)*u` for the refined variant)", which
+> attributed each paper's result to the other and called `sqrt(n log n)`
+> the refinement of `sqrt(n)`. Both halves were wrong; see the note under
+> "Citation verification (Step 6.1)" below. The script's raw
 output above reports "inconsistent with sqrt(n)" in the narrow sense of a
 CI-vs-0.5 comparison on the fitted slope; it does not mean the measurement
 contradicts those theorems. A growth rate flatter than slope 0.5 --
@@ -3580,7 +3594,9 @@ fetched and checked against the primary source):
   operand model, Definitions 1 and 3, for the latter, confirmed by fetching
   the paper's own text).
 - `higham2019new` and `connolly2021stochastic` -- DOIs, volumes and page
-  ranges cross-checked against publisher/indexing records.
+  ranges cross-checked against publisher/indexing records. **Claim-level
+  check added 2026-08-25, and it found a real misattribution** (see
+  "Misattribution of the two probabilistic bounds" below).
 - `sun2024massive` (arXiv:2402.17762) -- author list confirmed, including
   that Zhuang Liu is this paper's own fourth co-author (see correction
   below).
@@ -3633,6 +3649,37 @@ optional import, skipped if unavailable).
    added directly after the `microxcaling` relationship paragraph -- but
    as a corroborating citation for an already-correct statement, not a
    correction of an error.
+
+3. **Misattribution of the two probabilistic bounds -- real error, fixed
+   (2026-08-25).** Found while drafting the paper's Background section,
+   which needed to state these bounds precisely enough to cite one of them
+   alone. The "On how to read 'inconsistent with sqrt(n)'" paragraph above
+   read: "Higham & Mary (2019) and Connolly-Higham-Mary (2021) establish
+   `sqrt(n)*u` (respectively `sqrt(n log n)*u` for the refined variant)".
+   The `respectively` pairs each paper with the other's result, and the
+   parenthetical inverts the relationship between the two bounds a second
+   time. Both halves are wrong:
+
+   - **Higham & Mary (2019)** is the `sqrt(n log n)*u` result, not the
+     `sqrt(n)*u` one. Their paper states that `gamma_n` "can be replaced by
+     a relaxed constant proportional to `sqrt(n log n) u`, with a
+     probability bounded below" -- a general-case high-probability bound
+     under a mean-independence model of the rounding errors.
+   - **Connolly-Higham-Mary (2021)** is the `sqrt(n)*u` result: no log
+     factor, unconditional, and specific to **stochastic rounding**. It is
+     the *tighter* and later of the two, so calling `sqrt(n log n)` "the
+     refined variant" is backwards -- they are two different bounds for
+     two different rounding regimes, not a coarse and a refined version of
+     one result.
+
+   The original Step 6.1 pass verified both entries at DOI/volume/page
+   level only and so could not have caught this; `paper/refs.bib`'s own
+   comments never mention a log factor at all, and describe
+   `connolly2021stochastic` as "specifically the stochastic-rounding
+   refinement," which is consistent with the corrected attribution rather
+   than the erroneous one. The paragraph has been rewritten and carries an
+   inline correction note. Downstream text repeating the same error is
+   listed in the paper writing plan below.
 
 ### Open gaps -- not resolved here
 

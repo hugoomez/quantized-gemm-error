@@ -3714,9 +3714,17 @@ finding (Step 4.3) as the paper's headline, deliberately NOT with the
 stronger, more robust result.
 
 Section structure and target lengths (~6 of the workshop's allowed
-2-8 pages):
+2-8 pages, references excluded per the workshop CFP):
 
-1. Introduction (~0.75p): NVIDIA's 36%-more-tokens claim (attributed
+*Targets for sections 1 and 6 revised down 2026-08-25 (0.75p -> 0.5p and
+0.5p -> 0.4p respectively) because the drafted sections -- Method,
+Results, Background -- are running long against plan and the projected
+total was tracking toward 7.5-8.5 pages against the 8-page hard ceiling;
+tightening the not-yet-written sections now is preferred to cutting
+drafted content later under deadline pressure. All other targets
+unchanged.*
+
+1. Introduction (~0.5p): NVIDIA's 36%-more-tokens claim (attributed
    as a vendor claim), the two-confound observation (NVFP4 differs
    from MXFP4 in BOTH block size and scale format), the causal
    question as the falsifiable hypothesis. No mention of the ν* pivot
@@ -3739,7 +3747,7 @@ Section structure and target lengths (~6 of the workshop's allowed
 5. Validation with real activations (~0.75-1p): Step 4.4, framed as
    closing validation, including the massive-activations mechanism
    for the h6 discrepancy.
-6. Related work and limitations (~0.5p): differentiation from
+6. Related work and limitations (~0.4p): differentiation from
    rasquinha2023metric (dual role), fasoli2026finer, egiazarian2026bridging;
    honest limitations (CPU emulation not hardware, E2M1 only,
    intra-block correlation not fully isolated, c=1 fixed by design).

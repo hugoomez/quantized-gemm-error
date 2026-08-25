@@ -1001,14 +1001,11 @@ the same flat pattern. The full table (`median_be`, `p99_be`, `max_be`,
 probabilistic results sit behind that phrase, and neither is a refined
 version of the other. Higham & Mary (2019) replace `gamma_n` by a relaxed
 constant of order `sqrt(n log n)*u`, holding with a probability bounded
-below, for rounding errors modelled as mean-independent random variables --
-the general-case result, and the one that covers RTNE under that modelling
-assumption. Connolly-Higham-Mary (2021) prove a `sqrt(n)*u` bound with no
-log factor, unconditionally, but specifically for **stochastic rounding**,
-whose rounding errors are unbiased by construction. Both are
-**high-probability upper bounds** on sequential-summation error -- not
-statements about the typical or expected growth rate. This gate measures
-both rounding modes, so both results are in scope.
+below, for rounding errors modelled as mean-independent random variables.
+Connolly-Higham-Mary (2021) prove a `sqrt(n)*u` bound with no log factor,
+unconditionally, for **stochastic rounding**. Both are **high-probability
+upper bounds** on sequential-summation error -- not statements about the
+typical or expected growth rate.
 
 > **Correction (2026-08-25).** This paragraph previously read "Higham &
 > Mary (2019) and Connolly-Higham-Mary (2021) establish `sqrt(n)*u`

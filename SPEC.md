@@ -3724,7 +3724,25 @@ tightening the not-yet-written sections now is preferred to cutting
 drafted content later under deadline pressure. All other targets
 unchanged.*
 
-1. Introduction (~0.5p): NVIDIA's 36%-more-tokens claim (attributed
+*Second revision, 2026-08-26, from page-budget tracking rather than from
+any change of plan. With all five body sections drafted (Background,
+Method, Results, Validation, Related work = 4389 prose words), the
+projection reached 7.4-8.0 pages against the same 8-page ceiling once two
+things were counted that the original plan never budgeted: the figures,
+and the title + abstract block. Three consequences, recorded as item 0
+and in the Introduction line below, plus the figure-layout rule after the
+section list.*
+
+0. **Title block + abstract (~0.3p).** Missing from the original
+   seven-section plan, which listed only sections 1-7 and set no target
+   for the matter above Section 1, despite it occupying the top of page
+   one in every compiled draft. Budgeted here at ~0.3p and tracked
+   against the total from now on. This omission is what turned a
+   projection that appeared to clear the ceiling into one that does not
+   under every layout.
+1. Introduction (~0.4p, revised down from 0.5p on 2026-08-26 -- see the
+   second-revision note above; originally 0.75p): NVIDIA's
+   36%-more-tokens claim (attributed
    as a vendor claim), the two-confound observation (NVFP4 differs
    from MXFP4 in BOTH block size and scale format), the causal
    question as the falsifiable hypothesis. No mention of the ν* pivot
@@ -3752,6 +3770,18 @@ unchanged.*
    honest limitations (CPU emulation not hardware, E2M1 only,
    intra-block correlation not fully isolated, c=1 fixed by design).
 7. Conclusion (~0.25p).
+
+**Figure layout -- REQUIRED, not preferred (decided 2026-08-26).** Figures
+1 and 2 (`figure1_nu_star`, `figure2_n_scaling`) must be placed **side by
+side in a single two-up row**. Both are sized at 3.3in wide specifically to
+support this. Figure 3 (`figure3_causal_heatmap`) stays full width; at
+6.8in native it is wider than the 5.5in text box and scales to about 2.4in
+tall. This was a layout preference until the page-budget projection made it
+binding: side by side the three figures cost about 0.6p and the paper lands
+near 7.7p with the title/abstract block counted, while stacking them costs
+about 0.9p (~8.1in of stacked height) and pushes the projection to about
+8.0p -- at or over the hard ceiling. Stacking is therefore not available
+without cutting drafted content elsewhere to pay for it.
 
 Recommended writing order: Method -> Results -> Background ->
 Related work -> Introduction -> Conclusion -> Abstract.

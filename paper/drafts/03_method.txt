@@ -1,0 +1,344 @@
+===============================================================================
+METHOD  --  borrador en texto plano para revision
+===============================================================================
+
+Fuente: paper/sections/03_method.tex (commit 294a675).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [3.1-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 3.4-P2", "en 3.4-P3 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las formulas van en notacion legible (sqrt, <=, sum_k). Yo las devuelvo a
+    LaTeX. Si quieres cambiar una formula, escribela como te salga.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 2.46 paginas. El plan (SPEC.md, Step 6.2) pedia ~1.5-2p.
+    Sobra aprox. media pagina. Al final del fichero estan los candidatos
+    concretos a recortar.
+  - Compila limpio (sin errores, sin citas sin resolver, sin cajas mal
+    ajustadas).
+
+>> DOS COSAS QUE ESCRIBI DISTINTO A LO QUE ME PEDISTE, Y POR QUE:
+>>
+>> 1. Los controles. Me pediste decir que block16/e4m3 y block32/e8m0 son
+>>    controles. Segun SPEC.md esos dos son los formatos REALES
+>>    (32+e8m0 = MXFP4, 16+e4m3 = NVFP4). Los controles son block16+e8m0 y
+>>    block32+e4m3. Lo escribi al reves de como me lo pediste, es decir,
+>>    correcto segun el repo. Ver 3.4-P2.
+>>
+>> 2. sqrt(n log n) -- RESUELTO 2026-08-25, [3.2-P1] REESCRITO. Version
+>>    anterior de esta nota: dije que cite higham2019new y connolly2021stochastic
+>>    juntas porque SPEC.md (linea 1000) atribuia la variante refinada a
+>>    Connolly. Esa linea de SPEC.md era un ERROR REAL y ya esta corregida.
+>>    La atribucion correcta, contra las citas de fuente primaria del Step 6.1:
+>>      - Higham & Mary (2019) = sqrt(n log n)*u. Caso general, cota de alta
+>>        probabilidad bajo un modelo de errores de redondeo mean-independent.
+>>      - Connolly-Higham-Mary (2021) = sqrt(n)*u. Sin factor log,
+>>        INCONDICIONAL, y especifica de STOCHASTIC ROUNDING.
+>>    O sea que la version vieja de [3.2-P1] estaba mal por partida doble: por
+>>    el orden de las citas (implicaba Higham->sqrt(n), Connolly->sqrt(n log n),
+>>    justo al reves) y por llamar "more refined" a sqrt(n log n), cuando la
+>>    cota mas fina y mas tardia es la de Connolly. Ahora cada cota lleva su
+>>    cita por separado y se dice explicitamente que cubren regimenes de
+>>    redondeo distintos, no que una refine a la otra.
+>>
+>>    OJO: paper/sections/03_method.tex linea 63 SIGUE con el texto viejo y
+>>    malo. No lo he tocado porque la regla es que el .tex no se mueve hasta
+>>    que revises el .txt. Dime y lo paso.
+>>
+>> 3. Nombre del bound. SPEC.md lo llama cota(n). En el paper lo puse como
+>>    beta(n), porque "cota" en un paper en ingles queda raro sin traducir.
+>>    Es el mismo objeto. Si prefieres otro simbolo, dilo.
+
+
+===============================================================================
+3. METHOD
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+3.1 Setup: Backward Error with Exact Accumulation
+-------------------------------------------------------------------------------
+
+[3.1-P1]  
+The measurement device is a quantized GEMM. For matrices A (M x n) and B (n x N), both are quantized using a block-scaled low-precision format along the contraction dimension n, and the resulting float64 RECONSTRUCTIONS -- the dequantized values, not the integer representations -- are multiplied. The accuracy is assessed elementwise using the backward error {{cita: rasquinha2023metric}}.
+
+        BE_ij = | (A B)_ij - Chat_ij | / ( |A| |B| )_ij        (eq. 1)
+
+Here, Chat denotes the quantized product, and |.| is applied elementwise. The denominator is calculated using the product of absolute values, not |AB|; the two differ when the exact product involves cancellation.
+
+[3.1-P2]  
+The main approach accumulates the reconstructions with complete accuracy in float64 -- this is a design decision rather than a matter of implementation simplicity. A low-precision GEMM encounters two distinct sources of error: operands snapped onto a coarse grid and partial sums rounded in a narrow accumulator, which combine, making it unclear which source affects the measurement. With exact accumulation, the only remaining approximation stems from the quantization of the inputs, leading to the residual Chat - AB representing the input-quantization error, as isolated by (eq. 1). A bfloat16 accumulator is a secondary option purposely excluded from the analysis of this grid and is never included in the primary results.
+
+[3.1-P3]  
+Operands have i.i.d. t-Student(nu) entries -- smaller nu meaning heavier tails, nu -> infinity the Gaussian case -- each tensor normalized to unit median absolute deviation, since the standard deviation is undefined for nu <= 2.
+
+>> 3.1-P3 was not included in your list of contents; I added it for context to clarify what nu means. It is the first candidate for removal if additional space is needed.
+
+-------------------------------------------------------------------------------
+3.2 Reasons the Classical Bound Does Not Apply
+-------------------------------------------------------------------------------
+
+[3.2-P1]  
+The classical worst-case backward-error bound for a length-n inner product is gamma_n = n*u / (1 - n*u) under unit roundoff u {{cita: higham2002accuracy}}. Two probabilistic results relax that leading factor, each a high-probability upper bound rather than a statement about typical growth. Higham and Mary replace gamma_n by a relaxed constant of order sqrt(n log n)*u, holding with a probability bounded below, for rounding errors modelled as mean-independent random variables {{cita: higham2019new}}; Connolly, Higham and Mary prove a sqrt(n)*u bound with no log factor, unconditionally, for stochastic rounding specifically {{cita: connolly2021stochastic}}. The two cover different rounding regimes rather than refining one another.
+
+[3.2-P2]  
+Neither of these bounds are applicable here due to a mechanistic reason. The n-dependence of both families stems specifically from REPEATED ROUNDING DURING ACCUMULATION: a single rounding occurs during every summation step, totaling n, either compounding in the worst case (gamma_n) or behaving as a random walk (sqrt(n)*u). With exact accumulation, that mechanism is absent from the process, so any n-dependence observed in the measured error cannot align with those bounds. Additionally, a block-scaled format does not provide a fixed u to replace: the classical unit roundoff is half an ulp based on a grid defined by the encoding, while here, the grid that an element occupies is determined by the largest magnitude in ITS OWN BLOCK, resulting in the achieved relative error being a distribution rather than an attribute of the format.
+
+-------------------------------------------------------------------------------
+3.3 A Measured Unit Roundoff, and the Constructed Bound
+-------------------------------------------------------------------------------
+
+[3.3-P1]  
+The quantity that substitutes for u is measured directly. For a specific element format, block size, scale format, and tail index nu, define
+
+        u_eff(format, block, nu) = median_i  ( |x_i - xhat_i| / |x_i| )
+                                                                   (eq. 2)
+
+This represents the median per-element relative quantization error: samples are drawn from that nu, quantized according to that configuration, and the median is extracted from the resulting distribution. Its 99th percentile is recorded simultaneously. The estimation uses a separate calibration draw, initiated from an independent stream, ensuring that the denominator in the ratio tested below is never derived from the sample it is evaluated against.
+
+[3.3-P2]  
+One choice inside (eq. 2) is load-bearing. Relative error is ill-defined as x_i -> 0, and "near zero" is meaningful only relative to an element's own effective scale s_eff (block scale times global scale, where one is used), since block scales span many orders of magnitude across a heavy-tailed tensor. Elements with |x_i| <= 0.25 * s_eff are therefore excluded. The threshold is not tuned: E2M1's smallest nonzero magnitude is 0.5 * s_eff, so under round-to-nearest any element at or below 0.25 * s_eff quantizes to exactly zero with relative error 1 -- the format's dynamic-range floor, not its precision. That the cut is necessary was checked, not assumed: with it disabled, all 32 measured configurations return p99 = 1.00000 exactly. Its price is a large, configuration-dependent exclusion -- surviving fractions range from 0.360 (MXFP4 at nu = 1) to 0.932 (NVFP4 at the Gaussian end) -- tabulated wherever u_eff is reported.
+
+[3.3-P3]  
+With exact accumulation, the error at the output entry (i,j) consists of a sum of n one-time input-quantization errors with essentially random signs, such that partial cancellation results in its growth resembling sqrt(n) instead of n, while the denominator in (eq. 1), sum_k |A_ik| |B_kj|, adds n strictly positive terms and grows approximately linearly for well-behaved inputs. Together, these result in BE ~ sqrt(n) * u_eff / n, leading to the tested bound
+
+        beta(n, format, block, nu) = c * u_eff(format, block, nu) / sqrt(n)
+                                                                     (eq. 3)
+
+which DECAYS in n rather than grows. This is an order-of-magnitude argument of the central-limit/law-of-large-numbers kind, not a proven tight inequality, and is not offered as a theoretical contribution: both premises require moments the heaviest tails swept here lack, and at nu = 1 (Cauchy) the derivation is expected to break down -- a limit of its assumptions, not a defect in the form of (eq. 3).
+
+[3.3-P4]  
+The constant c is predetermined at c = 1 for all supporting analyses, in accordance with the anti-circularity principle established in the preregistration of this study: a bound whose constant is tailored to the data it evaluates cannot be refuted by that same data. Adopting a unit leading constant is consistent with the tradition of probabilistic rounding analyses, which replace n*u with sqrt(n)*u in a deterministic factor without introducing a fitted constant {{cita: connolly2021stochastic}}. Given that the derivation is order-of-magnitude rather than tight, a poorly calibrated c = 1 serves as a reportable finding instead of justification for recalibration; any estimation of c-hat derived from data remains descriptive and exploratory, not reintegrated into the confirmatory ratio.
+
+[3.3-P5]  
+The bound is deemed broken at (format, nu, n) when the lower limit of the 95% bootstrap confidence interval of the median of BE / beta(n) exceeds 1.0: indicating when the error decreases at a rate that is significantly slower than anticipated by the cancellation rate, rather than simply exceeding a growing worst-case limit. Because u_eff is indexed by nu, both sides of this ratio adjust with nu, testing whether the SCALING LAW endures despite heavy tails, rather than evaluating whether heavy tails increase absolute error.
+
+
+---
+
+3.4  Factorial design
+
+>> NUMERACION ARREGLADA 2026-08-26. Antes las etiquetas de esta subseccion
+>> iban como 3.5-Px y las de "Robust statistical protocol" como 3.6-Px,
+>> desplazadas una posicion respecto a los titulos reales. Ya no: las
+>> etiquetas de todo el fichero coinciden con las subsecciones (3.1 Setup,
+>> 3.2 Classical bound, 3.3 u_eff, 3.4 Factorial design, 3.5 Statistical
+>> protocol). El contenido y el orden no se han tocado -- solo las
+>> etiquetas. Se arreglo aqui, y no al pasar a LaTeX como decia la nota
+>> anterior, porque los otros borradores ya se citan entre si por estos
+>> numeros.
+
+[3.4-P1]
+MXFP4 and NVFP4 differ in both block size and scale format at the same time, so any
+difference measured between the presets cannot be attributed to any one factor
+individually: block size, scale format, and their interaction are confounded in
+that comparison. The design crosses the two factors, block size in
+{16, 32} against scale format in {E8M0, E4M3}, so either can be held fixed
+while the other varies. This 2x2 setup is the main causal comparison. The element format is E2M1
+everywhere, since both real formats use E2M1. Fixing this makes scaling
+the only thing that changes. The use of a per-tensor global scale comes from
+the scale format rather than being varied. E8M0 covers 255 binades and can reach any
+block’s magnitude on its own, while E4M3 covers about 19 and overflows to NaN
+without one.
+
+[3.4-P2]
+Two of the four combinations are real formats. Block 32 with an E8M0 scale is
+MXFP4, and block 16 with an E4M3 scale is NVFP4. The other two, block 16 with
+E8M0 and block 32 with E4M3, are experimental controls. They do not correspond to
+any hardware, specification, or vendor format, and exist only as
+measurement tools to make the comparison between the two real formats
+clear. This text does not propose, endorse, or benchmark them as formats, and
+the results tables keep this distinction clear.
+
+>> Los ** ** son negrita en el .tex. Es la frase que pediste que quedara
+>> inequivoca. Ver nota 1 de la cabecera: esta al reves de como me lo pediste
+>> porque asi es como lo dice SPEC.md.
+
+[3.4-P3]
+Rounding mode (either round-to-nearest-even or stochastic) and a random Hadamard
+transform (on or off) are secondary factors and are not part of the main causal comparison. The
+transform is applied to each block along the contraction dimension with the same
+random signs on both operands. This way, it cancels out inside every inner product and
+does not need inversion.
+
+[MOVED TO LIMITATIONS -- see paper/drafts/pending notes]
+
+[3.4-P4]
+These four factors are combined with the tail index, which runs over
+nu in {1, 2, 3, 5, 8, 15, 30} together with the Gaussian limit, and with the
+contraction dimension n in {16, 64, 256, 1024, 4096}, creating a grid of
+8 x 5 x 2^4 = 640 cells, all using exact accumulation. The primary contraction
+dimension is n = 4096. It was not fixed in advance: it was declared post hoc in a
+dated preregistration amendment, filed before any confirmatory nu* analysis was
+run but after the sweep itself and its n-scaling slope fits were already
+complete, on the stated grounds that 4096 is closest to real GEMM shapes in
+language-model workloads and is the n at which the sqrt(n)-decay derivation's
+asymptotic assumptions are most likely to hold.
+The other four values are used as robustness checks, reported as a
+separate sensitivity table and never substituted for it. Trial counts are
+adaptive. There are 5000 trials per cell at nu in {1, 2, 3}, where quantile estimates are
+noisiest and the bound is most likely to break, and 1000 trials per cell for the
+lighter tails, making a total of 1.6 million trials.
+
+>> Opcion (c) aplicada. Aqui habia dos frases sobre los tres formatos
+>> per-tensor de referencia (FP8-E4M3, FP8-E5M2, INT8). Eliminadas de Method.
+>> Su destino esta anotado al final de este fichero, en "PENDIENTE PARA LA
+>> SECCION 6". No se pierde nada: la nota de abajo es la que hay que leer al
+>> escribir Limitaciones.
+
+---
+
+3.5  Robust statistical protocol
+
+[3.5-P1]
+Each trial provides a summary of its own M x N backward-error matrix, and
+the trial is the resampling unit throughout, never the individual matrix
+element. Elements within a block share a scale factor, are not
+exchangeable, and would give anticonservative intervals that inflate the
+measured break rate. Confidence intervals use the percentile bootstrap,
+with B = 10,000 resamples and an explicitly seeded generator, and are reported as
+computed rather than forced to be symmetric.
+
+[3.5-P2]
+The median and 90th percentile carry all confirmatory statistical weight. The
+99th percentile is reported for every cell but is only indicative, at any trial
+count used here. The reason is a measured coverage gap, not a general
+warning that percentile bootstraps can be unreliable. A cell’s p99 is determined by
+roughly its top 1% of values (10 out of 1000 trials, 50 out of 5000), and a percentile
+bootstrap resamples with replacement from the observed sample, so it can
+reweight those values but can never produce a value more extreme than the largest
+already drawn. A coverage simulation quantifies this: 1000 simulated
+experiments per cell, t-Student(nu = 2), both trial budgets, nominal 95%.
+Median coverage is 95.5% at 1000 trials and 94.8% at 5000, which is close to
+nominal at both. The p99 coverage is 92.7% and 94.0%, which is below the
+median’s at both budgets and about 3.5 standard errors below nominal at 1000
+trials. The gap is real
+and in the direction the mechanism predicts, but it is modest rather than a collapse.
+More trials measurably help p99 without closing the gap, which is why the
+indicative-only status remains at every trial count, not just below some
+threshold.
+===============================================================================
+RECORTES YA APLICADOS  (2026-08-25)
+===============================================================================
+
+Aqui habia un menu de cuatro candidatos a recortar, con sus longitudes de
+ANTES del recorte. Los cuatro se aplicaron el 2026-08-25, asi que el menu ya
+no describia el fichero. Sustituido por el registro de lo que se hizo:
+
+  1. [3.1-P3]   62 -> 32 palabras. Comprimido, no eliminado: nu tiene que
+                 quedar definido antes de que 3.3 lo use. Se quito el detalle
+                 de la forma (64,n) x (n,64), que sigue en [3.4-P4].
+
+  2. [3.4-P3]  101 -> 59 palabras. Las tres frases del "por que por bloque y
+                 no global" se trasladaron a la seccion 6. Texto integro en el
+                 bloque "SEGUNDO TRASLADO A LA SECCION 6" mas abajo, y ya
+                 escrito en 06_related_work.txt, punto (ii) de [6-P2].
+
+  3. [3.3-P2]  168 -> 142 palabras. Recorte moderado, NO a dos frases. La
+                 evidencia del p99 = 1.00000 sobrevive intacta.
+
+  4. [3.3-P3]  160 -> 135 palabras. Recortada solo la coleta de
+                 "order-of-magnitude" (83 -> 58). El caveat de que la
+                 derivacion falla en nu = 1 (Cauchy) sobrevive en sustancia.
+
+Total: 1918 -> 1795 palabras (-123), es decir de ~2.6p a ~2.40p.
+
+DONDE ESTA ESTO EN EL HISTORIAL: en ningun commit. paper/drafts/ NO esta bajo
+control de versiones (git status lo da como untracked), asi que estos cuatro
+recortes existen solo en el fichero. Los commits de esa misma sesion --
+475728a y 284c7c4 (correccion de la misatribucion Higham/Connolly en SPEC.md)
+y 1dd87fd (bajada de objetivos de pagina) -- sirven de marca temporal, pero
+NINGUNO contiene estos recortes.
+
+NOTA: este bloque es solo registro. No reabre ninguno de los cuatro recortes.
+
+
+===============================================================================
+PENDIENTE PARA LA SECCION 6  (Related work and limitations)
+===============================================================================
+
+LEER ESTO AL ESCRIBIR LA SECCION 6. Es la otra mitad de la opcion (c): lo que
+se quito de Method tiene que reaparecer aqui, o se pierde.
+
+QUE SE QUITO DE METHOD (parrafo [3.4-P4])
+  Dos frases que decian que los tres formatos per-tensor de referencia
+  -- FP8-E4M3, FP8-E5M2 e INT8 -- se barren sobre la misma rejilla de nu a
+  n in {16, 256, 4096} como baselines de contexto.
+
+POR QUE SE QUITO
+  Porque no se han ejecutado. Verificado directamente, no inferido:
+    - iter_reference_cells (scripts/run_sweep.py, linea 602) se invoca SOLO
+      dentro de dry_run() -- el modelo de coste. execute_sweep() usa
+      unicamente iter_main_cells (linea 472).
+    - results/sweep_e945b87a2395/cells/ contiene exactamente 640 ficheros,
+      que son las celdas del grid principal. No hay ningun parquet de celdas
+      de referencia en ningun sitio de results/.
+    - SPEC.md, "What is deliberately not in scope here": las 72 celdas de
+      referencia "are **not** executed by this harness yet" y necesitan su
+      propia ruta de ejecucion.
+  Mencionarlas en Method en presente afirmaba como hecho algo que no ha
+  ocurrido.
+
+QUE TIENE QUE DECIR LA SECCION 6
+  Que la comparacion contra formatos per-tensor no block-scaled (FP8-E4M3,
+  FP8-E5M2, INT8) esta especificada en la rejilla congelada
+  (configs/sweep_main.yaml, reference_configs: 3 formatos x 8 nu x 3 n =
+  72 celdas, 180.000 trials) pero NO se ha ejecutado, de modo que este
+  trabajo no situa MXFP4/NVFP4 frente a la linea base clasica. Es una
+  limitacion de alcance declarada, no un hueco silencioso.
+
+REGLA MIENTRAS TANTO
+  El paper NO puede citar ningun numero de estos tres formatos, en ninguna
+  seccion, hasta que las 72 celdas se ejecuten de verdad.
+
+SI EN ALGUN MOMENTO SE EJECUTAN
+  Entonces esta nota queda obsoleta: habria que devolver la mencion a Method
+  en presente y borrar la limitacion de la seccion 6.
+
+
+-------------------------------------------------------------------------------
+SEGUNDO TRASLADO A LA SECCION 6: el "por que por bloque y no global" del RHT
+-------------------------------------------------------------------------------
+
+QUE SE QUITO DE METHOD (parrafo [3.4-P3], recorte de 2026-08-25)
+  Las tres frases finales del parrafo, que justificaban aplicar la
+  transformada de Hadamard POR BLOQUE en vez de por fila entera. En su
+  sitio queda el marcador [MOVED TO LIMITATIONS]. Texto integro retirado,
+  palabra por palabra:
+
+    "It spreads a block's energy so a single outlier no longer sets the
+     block scale. This is done per block by design. A global, whole-row
+     transform spreads by sqrt(n), linking its effect to the same n whose
+     scaling law this study examines."
+
+POR QUE SE QUITO
+  Solo por espacio. No hay ningun problema de correccion con estas frases,
+  a diferencia del traslado anterior (los formatos de referencia, que se
+  quitaron porque afirmaban algo no ejecutado). Method sigue diciendo QUE
+  la transformada es un factor secundario y COMO se aplica; lo que se va es
+  el POR QUE de la eleccion por bloque.
+
+QUE TIENE QUE DECIR LA SECCION 6
+  Que la RHT se aplica por bloque y no de forma global de manera
+  deliberada: una transformada global de fila entera reparte la energia
+  sobre sqrt(n), lo que ataria su efecto al mismo n cuya ley de escala
+  este estudio esta midiendo -- es decir, confundiria el tratamiento con
+  la variable de interes. Encaja de forma natural en la lista de
+  limitaciones/decisiones de diseno junto a c = 1 y la correlacion
+  intra-bloque.
+
+  Fuente en el repo por si hace falta reconstruir el argumento con mas
+  detalle: SPEC.md, seccion "Random Hadamard Transform" ("What it buys").
+
+REGLA MIENTRAS TANTO
+  El marcador [MOVED TO LIMITATIONS] de [3.4-P3] NO se pasa al .tex. O se
+  ha escrito ya la seccion 6 con este contenido, o el marcador se borra sin
+  mas -- pero no puede acabar en el PDF.

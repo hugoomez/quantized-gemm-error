@@ -1,0 +1,184 @@
+===============================================================================
+BACKGROUND  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/02_background.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [2-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 2-P3", "en 2-P2 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las formulas van en notacion legible (sqrt, <=, n*u). Yo las devuelvo a
+    LaTeX. Si quieres cambiar una formula, escribela como te salga.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 222 palabras de texto (39 + 86 + 51 en los tres parrafos, mas
+    18 de leyenda y 28 de nota al pie de tabla) + una tabla de 9 filas.
+    Estimo ~0.5
+    paginas en el formato NeurIPS, que es lo que pediste. No compilado
+    todavia (el .tex sigue vacio a proposito).
+  - Todos los valores de la tabla salen de SPEC.md, no de memoria. Al final
+    del fichero esta el mapa fila -> linea de SPEC.md, por si quieres
+    verificarlo sin buscar.
+
+
+===============================================================================
+2. BACKGROUND
+===============================================================================
+
+
+[2-P1]
+Both deployed FP4 formats store the same elements -- E2M1: one sign bit, two
+exponent bits, one mantissa bit, largest finite magnitude 6 -- and differ only
+in how a block of those elements is scaled. Table 1 states that difference.
+
+
+        Table 1. The two block-scaled FP4 formats. Elements are identical;
+        the scaling is the whole of the difference.
+
+        |                          | MXFP4                 | NVFP4                        |
+        |--------------------------|-----------------------|------------------------------|
+        | element format           | E2M1 (1/2/1)          | E2M1 (1/2/1)                 |
+        | block size               | 32                    | 16                           |
+        | block scale format       | E8M0 (0/8/0),         | E4M3 (1/4/3)                 |
+        |                          | a power of two        |                              |
+        | global scale             | none                  | one per tensor (FP32)        |
+        | scale range              | 2^-127 .. 2^127       | 2^-9 .. 448 relative to the  |
+        |                          | (255 binades)         | global scale (~19 binades)   |
+        | scale resolution         | one binade            | 6.25% (3 mantissa bits)      |
+        |                          | (no mantissa bits)    |                              |
+        | clipping of the block max| impossible by         | up to ~6%                    |
+        |                          | construction          |                              |
+        | specification / vendor   | OCP MX v1.0           | NVIDIA                       |
+        |                          | {{cita: ocp2023mx}}   | {{cita: nvidia2026nvfp4}}    |
+
+        Blocks run along the contraction axis. The MXFP4 block-scale exponent
+        admits more than one rounding convention in the literature; the one
+        used here is stated in Section 3.
+
+>> La nota al pie de la tabla no es relleno. SPEC.md (lineas 324-363) registra
+>> TRES convenciones para redondear el exponente de la escala MXFP4: el
+>> floor de OCP/microxcaling, el round-up de este proyecto, y el
+>> round-to-nearest + 4/3 de tseng2025training / egiazarian2026bridging. La
+>> fila "clipping of the block max: impossible by construction" SOLO es cierta
+>> bajo la convencion de este proyecto (round-up); bajo el default de OCP el
+>> maximo del bloque SI se recorta. Sin esa nota, la tabla afirmaria de MXFP4
+>> algo que es una eleccion nuestra. Si quieres, se puede quitar la fila
+>> entera y llevarla a Method, pero entonces la tabla pierde el contraste mas
+>> directo con el ~6% de NVFP4.
+
+
+[2-P2]
+The field's existing tools for reasoning about the accuracy of such a product
+are the classical rounding-error bounds for an inner product. For length n and
+unit roundoff u, the deterministic worst case is gamma_n = n*u / (1 - n*u)
+{{cita: higham2002accuracy}}, obtained by compounding one rounding per
+accumulation step. Probabilistic analysis refines the typical case, replacing
+that leading factor to give a high-probability bound of order
+sqrt(n log n) * u {{cita: higham2019new}}. Both are stated in terms of a
+single unit roundoff u fixed by the encoding.
+
+>> DOS COSAS EN 2-P2:
+>>
+>> 1. Escribiste "gamma_n = nu/(1-nu)". Lo he leido como n*u/(1-n*u), que es
+>>    lo que dice SPEC.md (linea ~1012) y lo que ya esta escrito en el
+>>    borrador de Method [3.2-P1]. Lo he puesto con el asterisco explicito
+>>    (n*u) precisamente porque en este paper "nu" es el indice de cola de la
+>>    t-Student, y "nu/(1-nu)" se lee mal a primera vista.
+>>
+>> 2. sqrt(n log n) -> higham2019new: CONFIRMADO CORRECTO, la cita se queda
+>>    como esta. Resuelto 2026-08-25. Lo que dije antes aqui (que SPEC.md
+>>    atribuia la variante refinada a Connolly y que quiza habia que citar las
+>>    dos juntas) apuntaba a un ERROR DE SPEC.md, no a un error de este
+>>    parrafo. SPEC.md linea ~1001 decia:
+>>
+>>      "Higham & Mary (2019) and Connolly-Higham-Mary (2021) establish
+>>       sqrt(n)*u (respectively sqrt(n log n)*u for the refined variant)"
+>>
+>>    El "respectively" empareja cada paper con el resultado del OTRO. La
+>>    atribucion correcta, contra las citas de fuente primaria del Step 6.1:
+>>      - Higham & Mary (2019) = sqrt(n log n)*u, caso general.
+>>      - Connolly-Higham-Mary (2021) = sqrt(n)*u, sin log, incondicional,
+>>        especifica de stochastic rounding.
+>>    Ademas "refined variant" esta al reves: la cota mas fina (y posterior)
+>>    es la de Connolly. Anadir connolly2021stochastic aqui habria sido una
+>>    misatribucion de verdad, no una cita de mas.
+>>
+>>    SPEC.md ya esta corregido (con nota de correccion fechada), y
+>>    [3.2-P1] del borrador de Method esta reescrito para atribuir cada cota
+>>    a su paper por separado. Las dos secciones son ahora consistentes.
+
+
+[2-P3]
+The empirical fact that gives this context its urgency is a reported gap
+between the two formats: NVIDIA reports that MXFP4 matches NVFP4's pretraining
+loss only when trained on 36% more tokens {{cita: nvidia2026nvfp4}} -- the
+vendor's own result, on its own 8B model, reported without an account of where
+the difference comes from.
+
+>> El "36%" esta atribuido explicitamente a NVIDIA como resultado propio,
+>> nunca como hecho independiente. Es lo que exige refs.bib ("Cite only as
+>> NVIDIA's own reported result (vendor claim), never as independent fact") y
+>> citation_worklist.md entrada 5. Verificado verbatim en Step 6.1 contra el
+>> HTML del propio paper: "MXFP4 matches NVFP4 loss when trained on 36% more
+>> tokens (i.e., using 1.36T instead of 1T tokens)", Fig. 6b, modelo hibrido
+>> Mamba-Transformer de 8B.
+>>
+>> Es UNA frase, como pediste, porque la Introduccion desarrolla esto. Si al
+>> escribir la Introduccion se cuenta ahi entero, esta frase se puede reducir
+>> a media linea o desaparecer.
+
+
+===============================================================================
+LO QUE **NO** DICE ESTA SECCION, A PROPOSITO
+===============================================================================
+
+No dice en ningun sitio que las cotas clasicas no apliquen a formatos con
+escala por bloque bajo acumulacion exacta. Eso es 3.2 (Method), y ya esta
+escrito alli: [3.2-P2] da el argumento mecanistico (la n-dependencia viene
+del redondeo repetido en la acumulacion, que aqui no existe) y el de la u
+(no hay un u fijo que sustituir, porque la rejilla de un elemento la fija el
+amax de SU bloque).
+
+Background solo deja puestas las dos piezas que 3.2 necesita para morder:
+  - "one rounding per accumulation step"  ->  lo que 3.2-P2 retira.
+  - "a single unit roundoff u fixed by the encoding"  ->  lo que 3.2-P2
+    sustituye por u_eff.
+Ambas frases estan escritas de forma neutra, como descripcion de lo que la
+cota ES, no como preparacion de un ataque.
+
+
+===============================================================================
+DE DONDE SALE CADA FILA DE LA TABLA  (SPEC.md, para verificar sin buscar)
+===============================================================================
+
+  element format E2M1 1/2/1, max 6      SPEC.md l.19 (tabla de formatos),
+                                         l.130-135 ("E2M1 format")
+  block size 32 / 16                     SPEC.md l.197-198 (tabla de presets),
+                                         l.418
+  E8M0 0/8/0 potencia de dos             SPEC.md l.22, l.61-65, l.419
+  E4M3 1/4/3                             SPEC.md l.20, l.54-56, l.419
+  global scale: ninguna / una por tensor SPEC.md l.420; recipe l.429-433
+  global scale en FP32                   SPEC.md l.444 ("float64 here,
+                                         float32 in hardware")
+  rango 2^-127..2^127 (255 binades)      SPEC.md l.61-62, l.424
+  rango 2^-9..448, ~19 binades           SPEC.md l.424, l.481-490
+  resolucion: un binade / 6.25%          SPEC.md l.423
+  clipping: imposible / hasta ~6%        SPEC.md l.422, l.470-479
+  MXFP4 = OCP MX                         SPEC.md l.197; refs.bib ocp2023mx
+                                         (OCP MX Specification v1.0, 2023)
+  NVFP4 = NVIDIA                         SPEC.md l.198; refs.bib
+                                         nvidia2026nvfp4
+
+Un detalle que NO he metido en la tabla y que quiza quieras: SPEC.md l.425
+anota que bajo NVFP4 las filas de un tensor NO son independientes entre si
+(la escala global es por tensor), y bajo MXFP4 si. Es una diferencia real y
+medible entre los dos formatos, pero no la usa Method, asi que la he dejado
+fuera por espacio. Dilo y entra como decima fila.

@@ -1,0 +1,167 @@
+===============================================================================
+RELATED WORK AND LIMITATIONS  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/06_related_work.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [6-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 6-P2", "en 6-P1 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 268 palabras (6-P1: 87, 6-P2: 181), contra un objetivo de
+    ~265 (0.4p x 667 palabras/pagina). El margen de 19 palabras que sobraba
+    en la primera version ya esta gastado en ampliar el punto (v).
+  - Los dos traslados desde Method estan cubiertos, ambos en [6-P2]:
+    puntos (i) formatos de referencia no ejecutados y (ii) RHT por bloque.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+6. RELATED WORK AND LIMITATIONS
+===============================================================================
+
+
+[6-P1]
+This work builds directly on the backward-error methodology of
+{{cita: rasquinha2023metric}}, extending it to block-scaled formats and
+heavy-tailed operands, neither of which that study covered. Two recent works
+approach FP4 microscaling from other directions. {{cita: fasoli2026finer}} also
+measures block-size effects on model accuracy, but attributes degradation to
+NARROW tensor distributions -- the opposite regime from the heavy tails swept
+here. {{cita: egiazarian2026bridging}} analyses MXFP4 and NVFP4 error under a
+Laplace operand model scored by per-element MSE, differing from this work in
+both the metric (backward error) and the distributional assumption (a
+t-Student tail sweep).
+
+
+[6-P2]
+Six scope limits qualify these results. (i) The three per-tensor reference
+formats -- FP8-E4M3, FP8-E5M2 and INT8 -- are specified in the frozen grid but
+never executed, so MXFP4 and NVFP4 are not positioned against a
+classical per-tensor baseline. (ii) The random Hadamard transform is applied
+per block by design: a global, whole-row transform spreads energy over sqrt(n)
+and would tie its effect to the same n whose scaling law is under study, so
+global RHT, used in some deployments, is not evaluated here. (iii) Quantization is
+CPU emulation in float64, not real quantized hardware. (iv) Only E2M1 elements
+are studied; no other element grid is swept. (v) Elements sharing a block share
+a scale, so their errors are correlated rather than independent -- the leading
+candidate behind the u_eff residual, consistent with a survival-fraction gap
+whose rank order against the u_eff block-size excess is perfect across all
+eight nu (Spearman 1.0), but not isolated by a dedicated ablation.
+(vi) The constant
+c = 1 is fixed a priori for anti-circularity, so what is characterized is the
+bound's functional FORM, not a calibrated absolute value.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> OJO CON EL PUNTO (v): CAMBIE UNA COSA DE LO QUE ME PEDISTE, Y ES
+>> IMPORTANTE. Me dijiste que escribiera que la survival-fraction gap sigue
+>> "the u_eff residual across the full nu grid (Spearman 1.0)". Eso mezcla
+>> DOS cantidades distintas, y SPEC.md avisa explicitamente de esa mezcla:
+>>
+>>   - Spearman 1.000 es entre la survival gap y el **u_eff block-size
+>>     EXCESS**, y ese si va sobre las ocho nu (SPEC.md l.1911-1914:
+>>     "its rank order against the u_eff block-size excess is perfect across
+>>     all eight nu (Spearman 1.000; Pearson 0.957, or 0.987 on logs)").
+>>   - El **residual** (el "unexplained shortfall") solo esta definido en
+>>     nu = 1 y nu = 30, DOS puntos. SPEC.md l.1917-1925 lo dice tal cual:
+>>     "no correlation across the grid can be computed for it and none is
+>>     claimed here: two points are always perfectly correlated", y remata
+>>     que coincidir en direccion con dos puntos "is weak evidence and is
+>>     reported as such".
+>>
+>> O sea que escribir "tracks the u_eff residual across the full nu grid
+>> (Spearman 1.0)" habria pegado el 1.0 a la cantidad equivocada y habria
+>> reclamado apoyo en toda la rejilla para algo medido en dos puntos.
+>> Exactamente el tipo de error que acabamos de corregir en SPEC.md.
+>>
+>> Lo que he escrito en (v) mantiene las dos separadas: la correlacion
+>> intra-bloque es "the leading candidate behind the u_eff residual"
+>> (que es como lo llama SPEC.md l.1685: "Leading candidate mechanism,
+>> confirmed directionally but not quantitatively"), y el Spearman 1.0 va
+>> atado al block-size excess sobre las ocho nu, que es su sitio.
+>>
+>> Si querias de verdad afirmar lo del residual sobre toda la rejilla,
+>> dimelo, pero entonces hay que cambiar SPEC.md primero, y SPEC.md dice
+>> hoy que ese numero no existe.
+
+>> PRESUPUESTO: 268 palabras contra el objetivo de ~265, con el punto (v)
+>> ya ampliado. Antes de ampliarlo eran 246. Para no pasarme, recorte 8
+>> palabras de fraseo en (i), (ii) y (vi) -- solo redaccion, ningun
+>> contenido: "were never executed" -> "never executed", "as used in some
+>> deployments" -> "used in some deployments", y "what is characterized here
+>> is the functional FORM of the bound" -> "what is characterized is the
+>> bound's functional FORM".
+>> No he cortado nada de lo que pediste: los tres trabajos estan
+>> diferenciados en [6-P1] con una clausula cada uno, y las seis
+>> limitaciones estan todas en [6-P2]. Asi que la respuesta a tu pregunta es
+>> que 0.4p SI da para este contenido.
+>>
+>> EN QUE SE GASTO EL MARGEN: en el punto (v), que era el mas expuesto de
+>> los seis. Antes decia "evidenced but not isolated", que afirmaba que
+>> habia evidencia sin decir cual; ahora nombra el mecanismo (escala
+>> compartida -> errores correlacionados) y la evidencia concreta.
+>>
+>> LO QUE SIGUE SIN CABER: la nota per-vector de rasquinha2023metric,
+>> ~20 palabras (ver la nota especifica mas abajo). A 268 palabras ya no hay
+>> hueco para ella dentro de 0.4p. Si la quieres, o subimos la seccion a
+>> ~0.45p, o sale de otro sitio.
+>>
+>> UNA DECISION DE MAQUETACION QUE ES TUYA: las seis limitaciones en un solo
+>> parrafo con numeracion romana se leen densas. Como lista LaTeX real
+>> (itemize) se leerian mucho mejor, pero una itemize ocupa mas alto de
+>> pagina que el mismo texto en prosa corrida, que es justo lo que estamos
+>> racionando. Lo he dejado en prosa por eso, no por preferencia.
+
+>> sun2024massive NO se cita aqui, a proposito. Segun el plan (SPEC.md, Step
+>> 6.2) su sitio es la seccion 5 (Validation), como mecanismo de las
+>> "massive activations" que explica la discrepancia de h6. Citarlo tambien
+>> aqui duplicaria a coste de palabras que no sobran. Lo lei porque me lo
+>> pediste; mi recomendacion es dejarlo en la 5. Si lo quieres tambien aqui,
+>> dime y busco ~15 palabras.
+
+>> rasquinha2023metric: refs.bib registra una diferencia metodologica que no
+>> he metido por espacio. El paper original usa escalado PER-VECTOR; la
+>> reproduccion de este proyecto (Step 2.2, scripts/sanity_reproduce_2408.py)
+>> uso PER-TENSOR deliberadamente, de modo que la reproduccion es
+>> direccional-cualitativa, no una replicacion exacta -- y SPEC.md ya lo dice
+>> asi. Si esa reproduccion se menciona en algun sitio del paper, esta
+>> diferencia tiene que aparecer con ella. Aqui no la he puesto porque [6-P1]
+>> habla de la METODOLOGIA que se extiende, no de la reproduccion. Coste si
+>> la quieres: ~20 palabras.
+
+>> ACCION AL PASAR AL .TEX (no es texto del paper):
+>>   1. Con esta seccion escrita, el marcador [MOVED TO LIMITATIONS] de
+>>      [3.4-P3] en 03_method.txt ya tiene destino y debe BORRARSE al portar
+>>      Method. No puede acabar en el PDF.
+>>   2. Sigue en vigor la regla del bloque "PENDIENTE PARA LA SECCION 6" de
+>>      03_method.txt: el paper NO puede citar ningun NUMERO de FP8-E4M3,
+>>      FP8-E5M2 ni INT8 en ninguna seccion mientras las 72 celdas de
+>>      referencia no se ejecuten. El punto (i) de [6-P2] es la divulgacion
+>>      de ese hueco, no un permiso para llenarlo.
+>>   3. Si esas 72 celdas llegan a ejecutarse, el punto (i) se cae y hay que
+>>      devolver la mencion a Method en presente (ver el mismo bloque).
+
+>> NUMERACION DE METHOD: RESUELTO 2026-08-26, esta nota ya no aplica. Decia
+>> que no habia verificado el "Sections 3.3 and 4.1" del punto (v). Dos cosas
+>> han cambiado desde entonces:
+>>   1. El punto (v) ya NO cita ninguna seccion. Al ampliarlo con la
+>>      evidencia concreta, la referencia cruzada dejo de aportar y se quito.
+>>      Asi que esta seccion no depende de la numeracion de Method.
+>>   2. El desfase de etiquetas de 03_method.txt esta arreglado en el propio
+>>      .txt (las de Factorial design eran 3.5-Px y ahora son 3.4-Px; las de
+>>      Statistical protocol eran 3.6-Px y ahora son 3.5-Px). La unica
+>>      referencia que esta seccion le hace a Method es a [3.4-P3], mas
+>>      abajo, y ya esta actualizada.

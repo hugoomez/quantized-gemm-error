@@ -1,0 +1,332 @@
+===============================================================================
+RESULTS  --  borrador en texto plano para revision
+===============================================================================
+
+Fuente: ninguna todavia. paper/sections/04_results.tex esta vacio
+("NOT YET WRITTEN"). Este .txt es el primer borrador y la version editable.
+Cuando lo revises y lo modifiques, yo paso tus cambios al .tex; el .tex no se
+toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [4.1-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 4.2-P6", "en 4.3-P2 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las formulas van en notacion legible (sqrt, <=, |x|). Yo las devuelvo a
+    LaTeX.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ORDEN INTERNO
+  El orden de las subsecciones NO es cronologico. Es el que fijaste en
+  SPEC.md, "Paper writing plan (Step 6.2)": 4.1 mecanismo (Step 4.1),
+  4.2 descomposicion causal (Step 4.3, el resultado que lidera), 4.3 el nulo
+  de nu* (Step 4.2, subordinado, enmarcado como "por que pivotamos").
+  Ojo con la doble numeracion: la seccion 4.2 DEL PAPER es el Step 4.3 DEL
+  SPEC, y la 4.3 del paper es el Step 4.2 del SPEC. Todo lo de abajo usa la
+  numeracion del paper.
+
+ESTADO ACTUAL
+  - Longitud: ~1520 palabras de prosa (4.1: 379, 4.2: 701, 4.3: 438), unas
+    1.9 paginas de texto. Con las tres figuras encima, el encaje en 2-2.5
+    paginas depende de como se coloquen: ver la seccion "LONGITUD" al final.
+    Es una decision de maquetacion, no de redaccion.
+  - Ya no queda ninguna nota >> dentro del cuerpo: las dos que habia
+    (c_hat y el encuadre de 4.2) estan resueltas. Las notas numeradas del
+    final siguen abiertas.
+  - Escribi un primer borrador de ~1970 palabras y lo recorte antes de
+    ensenartelo. No falta ningun numero de los que pediste explicitamente;
+    lo que se fue esta listado en la nota editorial 7, con lo que cuesta
+    devolver cada cosa.
+  - Sin compilar: no he tocado main.tex ni 04_results.tex, como pediste.
+  - Todos los numeros salen de SPEC.md Steps 4.1/4.2/4.3 y de los
+    statements en results/analysis/{n_scaling_fits,nu_star,
+    causal_decomposition}/. No hay ninguno aproximado ni redondeado a ojo.
+
+
+===============================================================================
+4. RESULTS
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+4.1 The Scaling Mechanism, Confirmed Where Its Assumptions Hold
+-------------------------------------------------------------------------------
+
+[4.1-P1]
+The empirical log-log slope of median(BE) against n is fitted by ordinary least
+squares for each of the 128 sub-configurations of the sweep -- 8 tail indices
+x 2 block sizes x 2 scale formats x 2 rounding modes x 2 Hadamard settings --
+over that configuration's own 5 values of n, with a 95% interval from 2000
+bootstrap replicates resampling each n's trials independently. The reference is
+the exponent -0.5 of (eq. 3).
+
+[4.1-P2]
+No configuration's interval contains -0.5. All 128 lie entirely above it: the
+error decays with n, but more slowly than the cancellation regime predicts. None
+decays faster, and none has a positive slope, so error grows with n nowhere in
+the grid. That unanimity alone overstates the finding, however. It rests on a
+significance test, and at 1000-5000 trials per cell the intervals exclude -0.5
+even when the
+point estimate misses it by a few thousandths. Splitting by magnitude instead,
+at |slope-(-0.5)| > 0.02, separates the two readings: **63 of the 128
+configurations deviate materially from -0.5, and 65 do not.**
+
+[4.1-P3]
+The split is ordered by tail weight, and the deviation shrinks smoothly and
+monotonically as the tail lightens. At nu in {1, 2, 3} every one of the 16
+sub-configurations is material, with gaps from 0.041 to 0.490; the extreme is
+nu = 1, where the fitted slopes run from -0.010 to -0.139, one to two orders of
+magnitude shallower than predicted rather than borderline. At nu in {5, 8} the
+sub-configurations straddle the threshold, some above and some below, consistent
+with a smooth transition rather than a sharp cutoff. At nu in {15, 30, Gaussian}
+none is material at any configuration, the gap staying between 0.004 and 0.020.
+
+[4.1-P4]
+The pattern follows the derivation's own premises rather than cutting across
+them. Section 3.3 obtained the -0.5 exponent from a mean-zero numerator behaving
+like a random walk and a denominator obeying a law of large numbers, both
+resting on moments the heaviest tails here lack -- at nu = 1 the t-Student is
+Cauchy, with neither a finite mean nor a finite variance. The exponent is
+recovered to within two hundredths exactly where those moments exist, and
+departs from it exactly where they do not (Figure 2).
+
+
+-------------------------------------------------------------------------------
+4.2 Scale Format, Not Block Size, Is the Larger Lever
+-------------------------------------------------------------------------------
+
+[4.2-P1]
+The 2x2 design is read directly off the measured backward error, with no
+theoretical bound involved at any point: no beta(n), no c, no ratio to 1. This
+decomposition is exploratory and post-hoc, adopted under a dated preregistration
+amendment (sec 8.4) once the preregistered confirmatory comparison -- P1-P3 of
+sec 4, all framed in terms of nu* -- was left undefined by the finding of
+Section 4.3. For each combination of tail index, contraction dimension, rounding
+mode and Hadamard setting, three statistics are formed in log space,
+
+    effect_block  = median(log BE | block=16)   - median(log BE | block=32)
+    effect_scale  = median(log BE | scale=E4M3) - median(log BE | scale=E8M0)
+    interaction   = [ (16,E4M3) - (32,E4M3) ] - [ (16,E8M0) - (32,E8M0) ]
+
+each marginal effect pooling over the other factor, with a 95%
+percentile-bootstrap interval from 2000 replicates resampling all four
+underlying cells in one shared pass. Neither the tail index nor n is collapsed.
+
+[4.2-P2]
+**Scale format moves the measured error more than block size does at every one
+of the 40 canonical cells** (8 nu x 5 n, round-to-nearest, no Hadamard
+transform), and the ranking survives the secondary factors: scale format leads
+in 34 of 40 cells with the Hadamard transform on, 38 of 40 under stochastic
+rounding, and 35 of 40 with both, never reversing to an overall block-size
+majority in any of the four combinations. At n = 4096, canonically, effect_scale
+ranges from -0.162 at the Gaussian end to -0.389 at nu = 2, against -0.042 to
+-0.246 for effect_block: a pull two to four times larger across the grid
+(Figure 3). Both effects are negative at every n >= 64, so block = 16 and E4M3
+-- NVFP4's two choices -- each reduce measured error relative to their
+alternatives, and the larger of the two reductions is the scale format.
+
+[4.2-P3]
+The ranking is identical at all 5 values of n, at every nu, with no crossing
+anywhere in the grid, so the practical answer here -- unlike the threshold
+analysis of Section 4.3 -- does not depend on which n had been designated
+primary. The n = 16 column is the apparent exception, and it is not measuring
+block size at all: zero-padding leaves max|x| unchanged, so a nominal block size
+of 32 spans the same 16 elements, with the same scale, as block size 16 does.
+The effect first becomes measurable at n = 64, where the two arms are genuinely
+different quantizers, and is essentially flat through n = 4096 (at nu = 1:
+-0.286, -0.270, -0.257, -0.246).
+
+[4.2-P4]
+The margin between the two factors is not uniform, and it is thinnest at the
+heaviest tail. Written as |effect_scale| - |effect_block|, it is 0.016 to 0.043
+at nu = 1 for n >= 64, against 0.124 to 0.135 at nu = 15 -- a four- to eightfold
+narrowing -- and the narrowing is confined to nu = 1, since at nu = 2 the margin
+is 0.16 to 0.19, the widest of the three tail indices examined. **The margin narrows
+sharply at nu = 1 but does not cross.** Point estimates never flip at any of the
+40 canonical cells, and at n = 4096 the intervals do not overlap:
+|effect_block| in [0.2395, 0.2510] against |effect_scale| in [0.2719, 0.2831].
+
+[4.2-P5]
+This agrees only partly with the per-element picture. Measured on u_eff -- the
+same two factors applied to the elementwise quantization error of (eq. 2) rather
+than to end-to-end error -- the block-size effect exceeds the scale-format
+effect at nu = 1 (1.155 against 1.113), and the two cross by nu = 2 (1.144
+against 1.120). In backward error the direction replicates but the crossing does
+not occur: at nu = 1 the block-size ratio is 1.298 to 1.329 across n >= 64
+against 1.465 to 1.524 for the scale format, a lead reduced but never erased.
+
+[4.2-P6]
+The two factors are not purely additive: the interaction term is significant at
+essentially every cell with n >= 64, from -0.095 at nu = 1 to -0.028 at the
+Gaussian end at n = 4096. It is not folded into the dominance comparison above,
+which uses the pooled marginal effects.
+
+
+-------------------------------------------------------------------------------
+4.3 Why the Analysis Is Framed by Magnitude and Not by a Threshold
+-------------------------------------------------------------------------------
+
+[4.3-P1]
+The decomposition of Section 4.2 is not the analysis this study set out to run.
+The preregistered plan was to locate nu*, the tail index at which beta(n) first
+fails by the criterion of Section 3.3, for each of the 16 families, and to
+compare the two block sizes by where their nu* falls.
+
+[4.3-P2]
+**The bound is broken at every one of the 8 tested tail indices, in every one of
+the 16 families, at n_primary = 4096**, and 0 of the 16 is non-monotone, so nu*
+is not merely hard to locate but undefined everywhere on this grid. For the two
+named presets, canonically, the median ratio at nu = 1 is 31.92 [31.85, 31.97]
+for MXFP4 and 20.91 [20.85, 20.97] for NVFP4, against 1.588 [1.585, 1.590] and
+1.515 [1.513, 1.517] at the Gaussian limit. Even in the near-Gaussian regime,
+which the derivation's assumptions fit best, the interval sits entirely above
+1: c = 1
+under-predicts the measured error by roughly 50 to 60% there, and by a factor of
+20 to 32 at nu = 1 (Figure 1).
+
+[4.3-P3]
+This is not an artifact of the primary contraction dimension: the same pattern
+holds at all 5 values of n, 16 of 16 families censored above and 0 below at
+each. For MXFP4 at nu = 1 the ratio is already 3.55 at n = 16 and rises through
+7.18, 12.10 and 19.62 to 31.92 at n = 4096, growing in line with the
+shallower-than-(-0.5) exponent of Section 4.1 rather than closing.
+
+[4.3-P4]
+The preregistration names this outcome in advance: its contingency for all cells
+being censored above states that the tail range was mis-specified, the
+hypothesis untestable on such a grid, and the result to be reported as a grid
+mis-specification rather than a confirmation. It is equally not a null -- the
+rank comparison returns equal fragility for the two block sizes only because
+every rank is pinned at the ceiling, the signature of a saturated measurement.
+The two confirmatory results therefore separate cleanly: the functional form of
+(eq. 3) is well supported at nu >= 15 (Section 4.1), while its leading constant,
+fixed at c = 1 by the anti-circularity constraint of Section 3.3, is not
+calibrated anywhere in the tested range.
+
+[4.3-P5]
+With no nu* to locate, block size and scale format could not be compared through
+the bound at all -- both sides are censored past the edge of what was measured.
+This is why Section 4.2 addresses the same practical question directly from
+measured magnitudes, rather than through the threshold criterion above.
+
+
+===============================================================================
+NOTAS EDITORIALES  --  cosas que tienes que decidir tu
+===============================================================================
+
+>> 1. NUMERACION DE LAS FIGURAS. Me pediste Figura 2 en 4.1, Figura 3 en 4.2
+>>    y Figura 1 en 4.3, y asi las he referenciado. Pero eso hace que la
+>>    Figura 1 se cite LA ULTIMA de las tres en el cuerpo del texto. Los
+>>    ficheros ya existen con esos nombres (paper/figures/figure1_nu_star,
+>>    figure2_n_scaling, figure3_causal_heatmap) y con esos contenidos, y
+>>    make_figures.py llama a figure1_nu_star "the paper's central figure",
+>>    que es de antes de la decision de liderar con el Step 4.3. Opciones:
+>>    (a) dejar los numeros como estan y forzar la colocacion de floats;
+>>    (b) renumerar para que sigan el orden de aparicion (nu_star pasaria a
+>>    ser la Figura 3); (c) dejarlo y que lo resuelva la maquetacion final.
+>>    NO he tocado nada. Es la unica nota que bloquea el paso a .tex.
+
+>> 2. EL UMBRAL DE 0.02 EN 4.1-P2. El corte |slope-(-0.5)| > 0.02 que separa
+>>    63 de 65 no esta preregistrado: SPEC.md dice que viene de
+>>    SLOPE_MATCH_TOL, la tolerancia que ya usaba scripts/probe_n_scaling.py
+>>    para esta misma distincion. Es decir, es anterior a estos datos y no se
+>>    eligio mirandolos, pero no esta en PREREGISTRATION. Tal como esta
+>>    escrito, el parrafo lo usa sin decir de donde sale. Creo que hace falta
+>>    media frase ("the same tolerance the pilot probe used") o una nota al
+>>    pie. No la he anadido porque no se si quieres gastar ahi las palabras.
+
+>> 3. LOS NUMEROS DE u_eff EN 4.2-P5 (1.155 / 1.113 / 1.144 / 1.120). Vienen
+>>    del analisis de u_eff del SPEC ("u_eff measurement", Result 3), que no
+>>    es ninguna de las tres subsecciones de Results ni esta descrito en
+>>    Method mas alla de la definicion de u_eff en 3.3. He metido una
+>>    clausula de contexto ("the same two factors applied to the elementwise
+>>    quantization error of (eq. 2)") para que el lector sepa que son otra
+>>    medicion, pero sigue siendo el parrafo mas denso de la seccion y cita
+>>    numeros de un analisis que el paper no presenta. Alternativas si no te
+>>    convence: moverlo a un apendice, o quitarlo y dejar solo 4.2-P4.
+
+>> 4. LO QUE NO HE PUESTO, A PROPOSITO. Me dijiste que no adelantara
+>>    Discussion ni Limitaciones. Por eso NO aparece: que extender la rejilla
+>>    hacia nu > 30 seria el siguiente paso natural para encontrar donde (si
+>>    en algun sitio) aguanta el bound; que la hipotesis del corte near-zero
+>>    explicaria parte del patron de 4.2-P5 pero esta sin confirmar del lado
+>>    del scale format; y que la ausencia de crossover en BE frente al
+>>    crossover en u_eff no esta mecanisticamente explicada. Las tres son
+>>    material de la seccion 6 y estan en SPEC.md (Step 4.2 "What this does
+>>    and does not mean", Step 4.3 "Reconciliation", punto 2). Apuntadas aqui
+>>    para que no se pierdan.
+
+>> 5. TABLA OPCIONAL EN 4.1. SPEC.md tiene la tabla de gap min/max por nu
+>>    (8 filas, 3 columnas). En 4.1-P3 la he dado en prosa por rangos, que
+>>    ocupa mucho menos. Si prefieres la tabla, la monto: son ~0.4 pulgadas
+>>    de alto y hace el patron monotono mucho mas visible de un vistazo.
+
+>> 6. NOMBRE DEL BOUND. Uso beta(n), igual que en el borrador de Method, no
+>>    "cota(n)" como lo llama SPEC.md. Mismo objeto. Si cambias el simbolo,
+>>    hay que cambiarlo en los dos ficheros.
+
+>> 7. LO QUE CAYO EN EL RECORTE DE 1970 A ~1350 PALABRAS. Nada de esto es
+>>    incorrecto ni discutible: son numeros y frases del SPEC que sacrifique
+>>    por espacio. Cualquiera vuelve en una linea si lo pides.
+>>      (a) 4.3-P2: la columna nu=30 de la tabla del SPEC -- MXFP4
+>>          1.615 [1.613, 1.618], NVFP4 1.531 [1.528, 1.533]. La quite
+>>          porque es casi identica a la del limite gaussiano (1.588 /
+>>          1.515) y el contraste que pediste (1.5x vs 32x) se ve igual sin
+>>          ella. Cuesta ~25 palabras devolverla.
+>>      (b) 4.2-P2: la frase que explicaba como leer la Figura 3 ("los dos
+>>          paneles de scale format se ven distintos entre si, las dos filas
+>>          de block size dentro de cada panel no"). Eso es material de pie
+>>          de figura, no de cuerpo. Cuando escribamos los captions tiene
+>>          que estar ahi, o la figura pierde su lectura de 5 segundos.
+>>      (c) 4.2-P3: que effect_block a n=16 es significativo en 1 de 8 nu
+>>          (nu=8, +0.0251), la tasa que da el azar en 8 tests al 95%. Era
+>>          el cierre del argumento de que ese cero es ruido de muestreo.
+>>      (d) 4.2-P6: que simetricamente el efecto del scale format es mayor a
+>>          block=32 que a block=16 (la misma afirmacion leida al reves).
+>>      (e) 4.3-P4: el detalle mecanico P1a=P1b=P2a=P2b=0 y que el patron
+>>          degenerado se repite en los 4 combos de round_mode x rht.
+>>          Resumido como "every rank is pinned at the ceiling".
+
+
+===============================================================================
+LONGITUD
+===============================================================================
+
+Prosa: ~1520 palabras (sin cabecera, sin notas >>). La calibracion sale del
+borrador de Method, contado igual: 1950 palabras de prosa = 2.46 paginas
+compiladas, o sea ~790 palabras por pagina en esta plantilla. 1520 / 790 =
+~1.9 paginas de texto.
+
+El resto lo deciden las figuras, no el texto. A tamano nativo:
+  figure1_nu_star         3.3 x 2.75 in
+  figure2_n_scaling       3.3 x 2.95 in
+  figure3_causal_heatmap  6.8 x 3.0 in  (mas ancha que la caja de texto de
+                          5.5 in; al escalarla queda en ~2.4 in de alto)
+
+Apiladas por separado son ~8.1 in de alto, casi una pagina entera: la seccion
+se iria a ~2.9 paginas, por encima de tu objetivo. Las figuras 1 y 2 miden
+3.3 in de ancho justamente porque caben lado a lado en una fila de dos:
+montadas asi, las tres ocupan ~0.6 paginas y la seccion cae a ~2.45, dentro
+del objetivo pero en el limite alto. No lo he decidido yo porque implica
+tocar el .tex.
+
+Resumiendo: el texto ya esta dentro; lo que decide si esto son 2.5 o 2.9
+paginas es la maquetacion de las figuras, no la redaccion.
+
+Si aun asi hay que recortar mas, por orden de "lo que menos duele":
+  1. [4.2-P6]   ~50 palabras. La interaccion. No la pediste; es un hallazgo
+                 real y medido, pero es el unico parrafo de 4.2 que no
+                 sostiene la tesis de la subseccion.
+  2. [4.3-P5]   ~45 palabras. El cierre que devuelve a 4.2. Se pierde el
+                 remate del orden no cronologico que pediste.
+  3. [4.2-P3]   la explicacion del zero-padding en n=16 son ~70 palabras.
+                 Se puede comprimir a una frase, pero entonces el lector se
+                 queda sin saber por que la columna n=16 se ve plana, que es
+                 exactamente el tipo de hueco que un revisor senala.
+  4. [4.2-P5]   ~90 palabras, la reconciliacion con u_eff. Es el recorte que
+                 mas duele de los cuatro y por eso va el ultimo: lo pediste
+                 explicitamente y es lo que impide que 4.2-P2 se lea como un
+                 "consistently" mas fuerte de lo que aguantan los datos.

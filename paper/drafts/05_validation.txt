@@ -1,0 +1,178 @@
+===============================================================================
+VALIDATION WITH REAL ACTIVATIONS  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/05_validation.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [5-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 5-P5", "en 5-P3 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 662 palabras (P1 132, P2 134, P3 123, P4 219, P5 54), contra
+    un objetivo de ~500-665 (0.75-1p x 667 palabras/pagina). Entra, cerca
+    del techo: ~0.99 paginas. [5-P4] crecio de 163 a 219 al anadir el
+    argumento de cobertura de la rejilla (ver NOTAS).
+  - Todos los numeros salen de SPEC.md "Step 4.4", incluido el addendum del
+    diagnostico de h6. Al final esta el mapa numero -> linea de SPEC.md.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+5. VALIDATION WITH REAL ACTIVATIONS
+===============================================================================
+
+
+[5-P1]
+The t-Student model underlying every result above was checked against the
+activations a real network produces. GPT-2 small was run over 300 non-empty
+lines of the WikiText-2 raw test split, giving 34,390 valid tokens, and
+activations were captured at three of its twelve transformer blocks -- h0, h6
+and h11, the first, middle and last -- all at the attention input projection
+(attn.c_attn), so that depth is the only thing varying across the three; the
+hook point is held fixed rather than mixed across layers. Padded positions are
+removed before any statistic or GEMM operand sees them, by construction rather
+than by a later filter. Tail weight is summarized by excess kurtosis in
+Fisher's convention, in which a Gaussian is 0 and not 3, computed over the full
+flattened tensor as a single distribution.
+
+[5-P2]
+Each layer's excess kurtosis k is mapped to an equivalent tail index through
+nu = 4 + 6/k, the closed-form inverse of a t-Student's k = 6/(nu - 4), which is
+defined only for nu > 4. The out-of-domain case is k <= 0, which no t-Student
+attains and which the code reports as N/A with a stated reason rather than
+extrapolating; it did not arise at any layer, though h6's nu = 4.06 sits within
+0.06 of the boundary. The quantized-GEMM pipeline of Section 3.1 is then run
+twice per layer and preset: once on the real activations, once on a synthetic
+t-Student(nu) draw of identical shape, rescaled so its median absolute
+deviation matches the real tensor's. The layer's own weight matrix serves as
+operand B in both arms, so the two runs differ only in operand A's tail shape.
+
+[5-P3]
+Four of the six layer-preset cells land within 10% of the t-Student
+prediction, and none falls outside 50%. At h0 (excess kurtosis 1.02,
+nu = 9.88) and h11 (7.03, nu = 4.85) the observed median(BE) matches the
+predicted value to within 2-4% under both presets: observed/predicted ratios
+of 0.997 and 0.987 at h0, 1.041 and 0.994 at h11. Layer h6 misses. Its excess
+kurtosis is 101.9, two orders of magnitude beyond the other two layers, its
+equivalent nu is 4.06, and its observed error runs 38% (MXFP4) and 23% (NVFP4)
+HIGHER than predicted. The direction is the informative part: the real
+activations produce MORE backward error than a MAD- and kurtosis-matched
+synthetic draw, so a single matched scalar under-describes how concentrated
+h6's outlier mass is.
+
+[5-P4]
+A targeted diagnostic on h6's own tensor, with no GEMM rerun, locates that
+concentration. The twenty largest activation magnitudes in the entire
+34,390 x 768 tensor fall in exactly one channel, index 64, across twenty
+distinct tokens. Within the top-1% pool the same channel accounts for 13.0% of
+the mass and appears for all 34,390 tokens, the five most frequent channels for
+58.2%, and the top ten for 75.3%; per-channel maxima drop sharply after a
+handful (8.06, 7.08, 6.55, 5.31, then 2.76 for the next channel down). This is
+the massive-activations pattern documented in transformer hidden states
+{{cita: sun2024massive}}, and it violates an assumption the synthetic model
+makes implicitly: that large values are randomly located and redrawn every
+sample, where h6's are anchored to the same few channels on essentially every
+token. The measured value also falls in a gap this study's own nu-grid never
+samples: nu in {1, 2, 3} have undefined population excess kurtosis, outside the
+closed form's nu > 4 domain, while nu >= 5 tops out at 6 for the heaviest
+finite-kurtosis grid point -- so 101.9 is finite but far past any value the
+grid covers. Whether that structure
+mechanistically drives the 23-38% gap, rather
+than merely correlating with it, is not established here -- no ablation
+separating channel structure from the kurtosis match was run, and none is
+claimed.
+
+[5-P5]
+This check is exploratory and bears on none of the confirmatory comparisons.
+It tests the modeling choice underlying the study rather than any hypothesis
+about the formats, and finds that choice sound across most of a real network
+while naming the condition -- extreme, channel-concentrated kurtosis -- under
+which a single kurtosis-matched nu stops being sufficient.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> rasquinha2023metric NO se cita aqui, y creo que es lo correcto. Me pediste
+>> comprobar si el matiz per-vector/per-tensor de refs.bib hace falta en esta
+>> seccion "si esta seccion habla de la metodologia de la reproduccion del
+>> Step 2.2". No habla: el Step 4.4 es la comprobacion con activaciones
+>> reales de GPT-2, y no tiene nada que ver con la reproduccion de
+>> arXiv:2408.02897. Asi que, siguiendo tu propia instruccion, queda fuera
+>> del todo. El matiz sigue sin aparecer en ningun sitio del paper; si algun
+>> dia se menciona la reproduccion del Step 2.2, tiene que ir con ella.
+
+>> [5-P5] NO estaba en tu lista de contenidos, lo he anadido yo. Razon:
+>> SPEC.md marca el Step 4.4 como EXPLORATORY en el propio titulo y
+>> PREREGISTRATION.md sec 5.1 lista "real activations" explicitamente bajo
+>> "exploratory ... never as evidence for or against H1". Publicar esta
+>> seccion sin decirlo la dejaria leerse como un cuarto resultado
+>> confirmatorio, que es justo lo que la preregistracion prohibe. Son 54
+>> palabras y es el primer candidato a recortar si hace falta espacio, pero
+>> recortarlo entero tiene un coste de honestidad, no solo de contenido.
+>> Alternativa mas barata: reducirlo a una sola frase dentro de [5-P4].
+
+>> ARGUMENTO DE COBERTURA DE LA REJILLA: ANADIDO 2026-08-26, en [5-P4],
+>> justo despues del mecanismo de massive activations y antes del caveat de
+>> "no probado". Es el argumento que en la version anterior estaba solo
+>> anotado aqui como pendiente. Costo 56 palabras, no las ~45 que estime;
+>> la seccion pasa de 606 a 662, que sigue dentro del objetivo de 500-665.
+>> Fuente: SPEC.md l.3452-3460.
+>>
+>> Ojo al orden de las tres piezas en [5-P4], que es deliberado:
+>> mecanismo (canales fijos) -> por que la rejilla no cubre este regimen ->
+>> lo que NO esta demostrado. Si se recorta el parrafo, el caveat final es
+>> lo ultimo que debe caer.
+
+>> REFERENCIA CRUZADA AFINADA 2026-08-26: [5-P2] decia "the quantized-GEMM
+>> pipeline of Section 3" (Method entera) y ahora dice "Section 3.1", que es
+>> donde se define el pipeline. Se puede afinar asi porque la numeracion de
+>> subsecciones de Method ya esta arreglada y estable en 03_method.txt
+>> (3.1 Setup, 3.2 Classical bound, 3.3 u_eff, 3.4 Factorial design,
+>> 3.5 Statistical protocol). Es la unica referencia cruzada a Method que
+>> hace esta seccion.
+
+>> Los seis "verdicts" de SPEC.md (CLOSE / MODERATE GAP / LARGE GAP) no
+>> aparecen en el texto: son etiquetas internas de la tabla del repo, con sus
+>> umbrales propios (10% / 50%), y he preferido dar los numeros y dejar que
+>> el lector juzgue. Los umbrales si estan, en la primera frase de [5-P3].
+
+
+===============================================================================
+DE DONDE SALE CADA NUMERO  (SPEC.md, "Step 4.4", para verificar sin buscar)
+===============================================================================
+
+  GPT-2 small, WikiText-2 raw test, 300 lineas   SPEC.md l.3354-3357
+  34.390 tokens validos                          SPEC.md l.3363
+  h0 / h6 / h11, attn.c_attn, pre-hook           SPEC.md l.3367-3372
+  padding excluido por construccion              SPEC.md l.3378-3384
+  curtosis de exceso, Fisher, gaussiana = 0      SPEC.md l.3386-3393
+  nu = 4 + 6/k, dominio nu > 4, caso k <= 0      SPEC.md l.3395-3407
+  h6 a 0.06 del borde                            SPEC.md l.3410-3411
+  brazo predicho: t-Student, MAD-matched, misma B SPEC.md l.3413-3421
+  tabla de 6 celdas (todos los ratios)           SPEC.md l.3430-3437
+  4 de 6 dentro del 10%, ninguna fuera del 50%   SPEC.md l.3444
+  h0 y h11 "2-4% off"                            SPEC.md l.3445-3446
+  h6: 1.383 MXFP4 / 1.234 NVFP4, observado MAYOR SPEC.md l.3500-3504
+  top-20 en el canal 64, 20 tokens distintos     SPEC.md l.3509-3513
+  13.0% / los 34.390 tokens / 58.2% / 75.3%      SPEC.md l.3513-3519
+  maximos por canal 8.06 / 7.08 / 6.55 / 5.31    SPEC.md l.3519-3521
+  siguiente canal (640) a 2.76                   SPEC.md l.3521
+  CONCENTRATED, consistente-no-prueba            SPEC.md l.3528-3535
+  sin ablacion que aisle la estructura de canal  SPEC.md l.3550-3556
+  23-38%, exploratorio, no toca H1 ni nu*        SPEC.md l.3478-3487
+
+Nota sobre sun2024massive: refs.bib registra que Zhuang Liu es el CUARTO
+coautor de ese mismo paper, no un trabajo aparte. Una version anterior de
+SPEC.md citaba "Liu et al." como si fuera una segunda fuente independiente y
+se corrigio en el Step 6.1. Aqui hay una sola cita, que es lo correcto.

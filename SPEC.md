@@ -3707,11 +3707,24 @@ discussion, not a claim requiring external verification -- unlike the
 Step 6.1 entries above, nothing here was fetched or fact-checked, and
 nothing here should be treated as such.*
 
-Draft title (not finalized): "Isolating the Design Choice Behind
-NVFP4's Advantage over MXFP4" -- leads with the causal-decomposition
-finding (Step 4.3) as the paper's headline, deliberately NOT with the
-ν* localization (Step 4.2), per author decision to lead with the
-stronger, more robust result.
+Draft title (not finalized): "Which Design Choice Explains NVFP4's Edge
+over MXFP4? A Backward-Error Decomposition" -- leads with the
+causal-decomposition finding (Step 4.3) as the paper's headline,
+deliberately NOT with the ν* localization (Step 4.2), per author
+decision to lead with the stronger, more robust result.
+
+*Title candidate revised 2026-08-26.* The earlier candidate, "Isolating
+the Design Choice Behind NVFP4's Advantage over MXFP4", presupposed the
+advantage as established fact. That contradicts the paper's own
+Introduction, whose first paragraph presents NVIDIA's 36%-more-tokens
+result as the vendor's own figure and explicitly not as independently
+established, per `paper/refs.bib`'s standing instruction to cite it
+"only as NVIDIA's own reported result (vendor claim), never as
+independent fact." The replacement frames the causal question -- which
+is what this work answers -- rather than the presupposed answer, and
+names the method. `paper/main.tex`'s title TODO comment carries the same
+change and the same reason. Still a draft candidate; the final title is
+an author decision.
 
 Section structure and target lengths (~6 of the workshop's allowed
 2-8 pages, references excluded per the workshop CFP):

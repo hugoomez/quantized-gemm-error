@@ -1,0 +1,122 @@
+===============================================================================
+INTRODUCTION  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/01_introduction.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [1-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 1-P4", "en 1-P2 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 264 palabras (P1 40, P2 87, P3 123, P4 14), contra un objetivo
+    de ~300 (0.4p x 745 palabras/pagina). Quedan ~36 palabras sin gastar,
+    tras comprimir la atribucion del 36% en [1-P1] (58 -> 40).
+  - Cuatro parrafos, uno por beat, en el orden que fijaste. Sin nu*, sin
+    numeros de Results, sin validacion, sin related work, sin limitaciones.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+1. INTRODUCTION
+===============================================================================
+
+
+[1-P1]
+NVIDIA reports that MXFP4 matches NVFP4's pretraining loss only when trained
+on 36% more tokens -- 1.36T against 1T -- on its own 8B hybrid
+Mamba-Transformer model {{cita: nvidia2026nvfp4}}: the vendor's own figure,
+not independently established here, and the observation that motivates this
+work.
+
+[1-P2]
+What the figure cannot say is which design choice earns the difference. The
+two formats store identical E2M1 elements and differ in their scaling alone,
+but they differ in two ways at once: NVFP4 scales blocks of 16 elements with
+an E4M3 scale factor, MXFP4 blocks of 32 with a power-of-two E8M0 factor. Any
+gap measured between the two presets is therefore attributable to the block
+size, to the scale format, or to an interaction between them, with no way to
+tell which from the comparison itself.
+
+[1-P3]
+This work separates them. Block size and scale format are crossed in a 2x2
+factorial design, so either can be held fixed while the other varies; the two
+deployed formats sit at diagonal corners of the resulting grid, and the
+off-diagonal cells correspond to no hardware and no specification, existing
+only as measurement instruments. Accuracy is measured as the backward error
+of a quantized GEMM, using the machinery of classical rounding-error analysis
+adapted to formats whose grid is set by the block an element falls in rather
+than by the encoding alone -- an adaptation Section 3 develops. The design is
+swept over operand tail weight and contraction length, so the comparison rests
+on a grid of configurations rather than on a single measurement.
+
+[1-P4]
+The scale format, not the block size, is found to be the dominant factor.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> EL 36% ESTA ATRIBUIDO, NO AFIRMADO. refs.bib es explicito: "Cite only as
+>> NVIDIA's own reported result (vendor claim), never as independent fact", y
+>> citation_worklist.md (entrada 5) dice lo mismo. En la version anterior la
+>> atribucion ocupaba una frase entera; el 2026-08-26 se comprimio a una
+>> clausula al final de la misma frase del dato (58 -> 40 palabras). La
+>> sustancia se mantiene entera: de quien es la cifra ("its own ... model",
+>> "the vendor's own figure"), que aqui NO se da por establecida ("not
+>> independently established here"), y para que se usa (la observacion que
+>> motiva el trabajo). Esto ya no se puede comprimir mas sin convertir una
+>> cifra de fabricante en un hecho, que es justo lo que la politica prohibe.
+>>
+>> Numeros verificados verbatim en el Step 6.1 contra el HTML del propio
+>> paper (arxiv.org/html/2509.25149v1, Sec. 5 y pie de Fig. 6b): "MXFP4
+>> matches NVFP4 loss when trained on 36% more tokens (i.e., using 1.36T
+>> instead of 1T tokens)", modelo hibrido Mamba-Transformer de 8B.
+
+>> [1-P4] es deliberadamente de una sola frase, como pediste: el hallazgo al
+>> nivel del TITULO y nada mas. Sin nu*, sin magnitud del efecto, sin numeros.
+>> Ojo: tal como esta, la Introduccion NO anuncia la estructura del paper
+>> (no dice "Section 4 reports X, Section 5 does Y"). Es lo que pediste --
+>> una frase, no un roadmap -- y ademas la Seccion 5 esta explicitamente
+>> fuera de esta seccion. Lo digo por si al leerlo echas de menos el mapa:
+>> es una decision, no un olvido.
+
+>> LO QUE NO ESTA AQUI, A PROPOSITO: el pivot de nu* (solo en Results, 4c),
+>> la validacion con activaciones reales (Seccion 5), la diferenciacion
+>> frente a rasquinha2023metric / fasoli2026finer / egiazarian2026bridging y
+>> las limitaciones (las dos en la Seccion 6). Ninguna de las tres se asoma
+>> ni de refilon.
+
+>> TENSION DEL TITULO: RESUELTA 2026-08-26. El candidato anterior,
+>> "Isolating the Design Choice Behind NVFP4's Advantage over MXFP4", daba
+>> por supuesta la ventaja, justo lo que [1-P1] se niega a dar por
+>> establecido. Candidato nuevo, decidido por ti:
+>>
+>>   "Which Design Choice Explains NVFP4's Edge over MXFP4?
+>>    A Backward-Error Decomposition"
+>>
+>> Enmarca la PREGUNTA causal en vez de la respuesta presupuesta. Sigue
+>> siendo provisional. Actualizado en los dos sitios donde vivia el
+>> candidato viejo: el comentario TODO de paper/main.tex (donde \title{}
+>> sigue vacio a proposito) y SPEC.md, "Paper writing plan (Step 6.2)".
+
+>> "the machinery of classical rounding-error analysis adapted to..." en
+>> [1-P3] es el gancho hacia Method que pediste: gesticula, no explica. El
+>> desarrollo real esta en 3.2 (por que la cota clasica no transfiere) y 3.3
+>> (u_eff y la cota construida). Si te parece demasiado vago, la alternativa
+>> es nombrar u_eff aqui, pero cuesta ~15 palabras y adelanta Method.
+
+>> PRESUPUESTO: 282 de ~300, o sea ~18 sin gastar. Si la Introduccion tiene
+>> que crecer, ademas de esas 18, lo mas
+>> barato del paper esta en 06_related_work.txt, que quedo en 268 palabras
+>> contra un objetivo que con el ratio corregido (745 w/p) son ~300: hay ~30
+>> palabras sin reclamar alli. No las he movido; solo apunto donde estan.

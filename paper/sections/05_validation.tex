@@ -1,5 +1,63 @@
-% =====================================================
-% Validation — target length: TBD (no prior chat discussion on
-% record establishing this — see main.tex header note).
-% NOT YET WRITTEN.
-% =====================================================
+\section{Validation with Real Activations}
+\label{sec:validation}
+
+The t-Student model underlying every result above was checked against the
+activations a real network produces. GPT-2 small \citep{radford2019language} was
+run over 300 non-empty lines of the WikiText-2 \citep{merity2016pointer} raw test
+split, giving 34,390 valid tokens, and activations were captured at three of its
+twelve transformer blocks --- h0, h6 and h11, the first, middle and last --- all
+at the attention input projection (\texttt{attn.c\_attn}), so that depth is the
+only thing varying across the three. Padded positions are removed before any
+statistic or GEMM operand sees them. Tail weight is summarized by excess kurtosis
+in Fisher's convention, in which a Gaussian is 0 and not 3, computed over the
+full flattened tensor as a single distribution.
+
+Each layer's excess kurtosis $k$ is mapped to an equivalent tail index through
+$\nu = 4 + 6/k$, the closed-form inverse of a t-Student's $k = 6/(\nu - 4)$,
+which is defined only for $\nu > 4$. The out-of-domain case is $k \le 0$, which
+no t-Student attains and which the code reports as N/A with a stated reason
+rather than extrapolating; it did not arise at any layer, though h6's
+$\nu = 4.06$ sits within 0.06 of the boundary. The quantized-GEMM pipeline of
+Section~\ref{sec:method:setup} is then run twice per layer and preset: once on
+the real activations, once on a synthetic t-Student($\nu$) draw of identical
+shape, rescaled so its median absolute deviation equals the real tensor's. The
+layer's own weight matrix serves as operand $B$ in both arms, so the two runs
+differ only in operand $A$'s tail shape.
+
+Four of the six layer-preset cells land within 10\% of the t-Student prediction,
+and none falls outside 50\%. At h0 (excess kurtosis 1.02, $\nu = 9.88$) and h11
+(7.03, $\nu = 4.85$) the observed $\mathrm{median}(\mathrm{BE})$ equals the
+predicted value to within 2--4\% under both presets: observed/predicted ratios of
+0.997 and 0.987 at h0, 1.041 and 0.994 at h11. Layer h6 misses. Its excess
+kurtosis is 101.9, two orders of magnitude beyond the other two layers, its
+equivalent $\nu$ is 4.06, and its observed error runs 38\% (MXFP4) and 23\%
+(NVFP4) \emph{higher} than predicted. The direction is the informative part: the
+real activations produce \emph{more} backward error than a MAD- and
+kurtosis-matched synthetic draw, so a single matched scalar under-describes how
+concentrated h6's outlier mass is.
+
+A targeted diagnostic on h6's own tensor, with no GEMM rerun, locates that
+concentration. The twenty largest activation magnitudes in the entire
+$34{,}390 \times 768$ tensor fall in exactly one channel, index 64, across twenty
+distinct tokens. Within the top-1\% pool the same channel accounts for 13.0\% of
+the mass and appears for all 34,390 tokens, the five most frequent channels for
+58.2\%, and the top ten for 75.3\%; per-channel maxima drop sharply after a
+handful (8.06, 7.08, 6.55, 5.31, then 2.76 for the next channel down). This is
+the massive-activations pattern documented in transformer hidden states
+\citep{sun2024massive}, and it violates an assumption the synthetic model makes
+implicitly: that large values are randomly located and redrawn every sample,
+where h6's are fixed to the same few channels on essentially every token. The
+measured value also falls in a gap this study's own $\nu$-grid never samples:
+$\nu \in \{1, 2, 3\}$ have undefined population excess kurtosis, outside the
+closed form's $\nu > 4$ domain, while $\nu \ge 5$ tops out at 6 for the heaviest
+finite-kurtosis grid point --- so 101.9 is finite but far past any value the grid
+covers. Whether that structure mechanistically drives the 23--38\% gap, rather
+than merely correlating with it, is not established here --- no ablation
+separating channel structure from the kurtosis match was run, and none is
+claimed.
+
+This check is exploratory and bears on none of the confirmatory comparisons. It
+tests the study's modeling choice, not any hypothesis about the formats, and
+finds it sound across most of a real network --- failing only under extreme,
+channel-concentrated kurtosis, where a single kurtosis-matched $\nu$ is
+insufficient.

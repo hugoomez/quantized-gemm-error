@@ -1,5 +1,28 @@
-% =====================================================
-% Related Work — target length: TBD (no prior chat discussion on
-% record establishing this — see main.tex header note).
-% NOT YET WRITTEN.
-% =====================================================
+\section{Related Work and Limitations}
+\label{sec:related}
+
+This work builds directly on the backward-error methodology of
+\citet{rasquinha2023metric}, extending it to block-scaled formats and
+heavy-tailed operands. Two recent works approach FP4 microscaling from other
+directions. \citet{fasoli2026finer} also measures block-size effects on model
+correctness, but attributes degradation to \emph{narrow} tensor distributions ---
+the opposite regime from the heavy tails swept here.
+\citet{egiazarian2026bridging} analyses MXFP4 and NVFP4 error under a Laplace
+operand model scored by per-element MSE, differing from this work in both metric
+and operand model.
+
+Six scope limits qualify these results. (i) The three per-tensor reference
+formats --- FP8-E4M3, FP8-E5M2 and INT8 --- are in the frozen grid but never
+executed, leaving MXFP4 and NVFP4 without a classical per-tensor baseline.
+(ii) The random Hadamard transform is applied per block: a global, whole-row
+transform would spread energy over $\sqrt{n}$, tying its effect to the same $n$
+whose scaling law is under study, so global RHT is not evaluated here.
+(iii) Quantization is CPU emulation in float64, not real quantized hardware.
+(iv) Only E2M1 elements are studied. (v) Elements sharing a block share a
+scale, so their errors are correlated rather than independent --- the leading
+candidate behind the $u_{\mathrm{eff}}$ residual, consistent with a
+survival-fraction gap whose rank order against the $u_{\mathrm{eff}}$ block-size
+excess is perfect across all eight $\nu$ (Spearman 1.0), but not isolated by a
+dedicated ablation. (vi) $c = 1$ is fixed a priori for
+anti-circularity, so what is characterized is the bound's functional \emph{form},
+not a calibrated absolute value.

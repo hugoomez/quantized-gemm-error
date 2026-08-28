@@ -1,8 +1,24 @@
-% =====================================================
-% Introduction — target length: TBD (no prior chat discussion
-% establishing a target length or outline exists in this session or
-% in this repository's tracked files/history — checked before writing
-% this stub, not assumed; flagged rather than invented, see
-% main.tex's header note).
-% NOT YET WRITTEN.
-% =====================================================
+\section{Introduction}
+\label{sec:intro}
+
+NVIDIA reports that MXFP4 matches NVFP4's pretraining loss only when trained on
+36\% more tokens --- 1.36T against 1T --- on its own 8B hybrid Mamba-Transformer
+model \citep{nvidia2026nvfp4}: the vendor's own figure, not independently
+established here, and the observation that motivates this work.
+
+What the figure cannot say is which design choice earns the difference. The two
+formats store identical E2M1 elements and differ in their scaling alone, but they
+differ in two ways at once: NVFP4 scales blocks of 16 elements with an E4M3 scale
+factor, MXFP4 blocks of 32 with a power-of-two E8M0 factor. Any gap measured
+between the two presets is therefore attributable to the block size, to the scale
+format, or to an interaction between them, with no way to tell which from the
+comparison itself.
+
+This work separates them. Block size and scale format are crossed in a
+$2\times2$ factorial design, so either can be held fixed while the other varies.
+Accuracy is measured as the backward error of a quantized GEMM, using classical
+rounding-error analysis adapted to block-scaled formats (Section~\ref{sec:method}).
+The design is swept over operand tail weight and contraction length, so the
+comparison rests on a grid of configurations rather than on a single measurement.
+
+The scale format, not the block size, is found to be the dominant factor.

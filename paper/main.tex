@@ -75,6 +75,16 @@
 \usepackage{microtype}
 \usepackage{xcolor}
 \usepackage{graphicx} % added -- not in the base template, but this paper needs figures; see header note
+\usepackage{subcaption} % added per request -- pulls in caption; neurips_2026.sty loads no caption/float package, so no clash (verified on recompile). Not currently used (all three Results figures are independent standalone floats); kept loaded, safe to drop if no sub-figures are needed.
+
+% Cosmetic: trim ~2--3pt from the LaTeX-default display-math skips (not set by
+% neurips_2026.sty -- not a venue style parameter). Reclaims a little vertical
+% space around the ~5 display equations. Font size, margins, and heading spacing
+% untouched.
+\setlength{\abovedisplayskip}{7pt plus 2pt minus 4pt}
+\setlength{\belowdisplayskip}{7pt plus 2pt minus 4pt}
+\setlength{\abovedisplayshortskip}{0pt plus 2pt}
+\setlength{\belowdisplayshortskip}{4pt plus 2pt minus 2pt}
 
 \workshoptitle{New in ML at NeurIPS 2026}
 
@@ -107,8 +117,23 @@
 \maketitle
 
 \begin{abstract}
-  % TODO -- written last, per the recommended writing order in SPEC.md's
-  % "Paper writing plan (Step 6.2)" section.
+  NVIDIA reports that MXFP4 needs 36\% more training tokens than NVFP4 to reach
+  the same pretraining loss on its own 8B model, but the two formats differ in
+  two ways at once, block size and scale format, so that result cannot say which
+  choice is responsible. This work separates them. Backward error is measured on
+  a quantized GEMM under exact accumulation, isolating input quantization from
+  accumulator rounding, with classical rounding-error analysis adapted to
+  block-scaled formats. Block size and
+  scale format are crossed in a two-by-two design and swept over operand tail
+  weight and contraction length. The scale format moves measured error more than
+  the block size does at every canonical cell, and the ranking survives
+  stochastic rounding and a random Hadamard transform; the margin narrows sharply
+  at the heaviest tail without crossing. The originally planned comparison,
+  locating the tail index at which the derived bound first fails, proved
+  uninformative: the bound is broken across the entire tested range, which
+  motivated the magnitude-based analysis reported here. Against GPT-2 activations
+  the predictions transfer closely at two of three layers, with the third traced
+  to channel-concentrated outliers.
 \end{abstract}
 
 \input{sections/01_introduction}

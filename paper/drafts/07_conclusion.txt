@@ -1,0 +1,89 @@
+===============================================================================
+CONCLUSION  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/07_conclusion.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [7-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 7-P2", "en 7-P1 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 188 palabras (P1 88, P2 100), contra un objetivo de ~185
+    (0.25p x 745 palabras/pagina).
+  - Sin citas nuevas y sin numeros: ninguna cifra de Results se repite aqui.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+7. CONCLUSION
+===============================================================================
+
+
+[7-P1]
+Two design choices separate NVFP4 from MXFP4, and they do not contribute
+equally. Across the full grid of tail weights and contraction lengths, the
+scale format moves the measured backward error more than the block size does,
+at every canonical cell, and the ranking survives both secondary factors --
+stochastic rounding and the random Hadamard transform -- without reversing
+anywhere. The margin narrows at the heaviest tail without crossing. This is a
+post-hoc decomposition of measured magnitudes, not a preregistered test, and it
+involves no theoretical bound at any point.
+
+[7-P2]
+That last property is what the threshold analysis leaves behind. The
+constructed bound breaks across the whole tested range, so the tail index at
+which it first fails is undefined everywhere on this grid, and could not carry
+the planned comparison; that null motivated the pivot to comparing magnitudes
+directly, and does not bear on the decomposition, which never uses the bound.
+Two steps would sharpen the picture: executing the specified but unrun
+per-tensor reference cells, which would place both formats against a classical
+baseline, and an ablation separating the intra-block correlation mechanism from
+other contributors to the u_eff residual.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> "post-hoc decomposition ... not a preregistered test" en [7-P1]: no es un
+>> matiz que me haya inventado para la conclusion, es lo que dice [4.2-P1]
+>> ("This decomposition is exploratory and post-hoc, adopted under a dated
+>> preregistration amendment (sec 8.4)"). Lo he metido porque una conclusion
+>> que enuncie el hallazgo causal SIN ese calificativo lo deja mas fuerte de
+>> lo que Results aguanta, y este proyecto ha sido consistente en no hacer
+>> eso. Cuesta 14 palabras. Si te parece que en la conclusion sobra, se
+>> quita, pero entonces el lector se lleva la version fuerte.
+
+>> LA FRASE DE nu* HACE DOS COSAS A LA VEZ, a proposito. Dice que el nulo
+>> motivo el pivot Y que no toca al hallazgo causal, y el "which never uses
+>> the bound" es lo que conecta las dos: 4.2 se lee directamente de las
+>> magnitudes medidas, sin beta(n), sin c y sin ratio contra 1 ([4.2-P1]).
+>> Sin esa clausula, decir "no lo socava" seria una afirmacion sin apoyo
+>> visible en la propia conclusion.
+
+>> SIN NUMEROS, COMO PEDISTE. Ni las 40 celdas canonicas, ni el 34/38/35 de
+>> 40 de los factores secundarios, ni los rangos de effect_scale y
+>> effect_block, ni los ratios de 4.3. Todo eso vive en Results. El coste es
+>> que "at every canonical cell" y "without reversing anywhere" son
+>> afirmaciones fuertes sin cifra que las respalde en esta seccion; se
+>> apoyan en la Seccion 4.2, que es donde el lector acaba de estar.
+
+>> LAS 72 CELDAS: aqui las llamo "the specified but unrun per-tensor
+>> reference cells" sin dar el numero, por la regla de no repetir cifras.
+>> Ojo con la regla que sigue en vigor (bloque "PENDIENTE PARA LA SECCION 6"
+>> de 03_method.txt): el paper no puede citar ningun NUMERO de FP8-E4M3,
+>> FP8-E5M2 ni INT8 hasta que esas celdas se ejecuten. Nombrarlas como
+>> trabajo futuro no viola esa regla; darles resultados si.
+
+>> NO HE MENCIONADO la Seccion 5 (validacion con activaciones reales). No
+>> estaba en tu lista de contenidos para esta seccion y a 185 palabras no
+>> cabe sin quitar otra cosa. Si quieres que la conclusion cierre tambien
+>> ese arco, la frase mas barata seria una clausula dentro de [7-P1]
+>> (~15 palabras), y habria que recortar en [7-P2].

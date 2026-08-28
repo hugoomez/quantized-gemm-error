@@ -1,5 +1,21 @@
-% =====================================================
-% Conclusion — target length: TBD (no prior chat discussion on
-% record establishing this — see main.tex header note).
-% NOT YET WRITTEN.
-% =====================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+Two design choices separate NVFP4 from MXFP4, and they do not contribute equally.
+Across the full grid of tail weights and contraction lengths, the scale format
+moves the measured backward error more than the block size does, at every
+canonical cell, and the ranking survives both secondary factors --- stochastic
+rounding and the random Hadamard transform --- without reversing anywhere. The
+margin narrows at the heaviest tail without crossing. This is a post-hoc
+decomposition of measured magnitudes, not a preregistered test, and it involves
+no theoretical bound at any point.
+
+That last property is what the threshold analysis leaves behind. The constructed
+bound breaks across the whole tested range, so the tail index at which it first
+fails is undefined everywhere on this grid, and could not carry the planned
+comparison; that null motivated the pivot to comparing magnitudes directly, and
+does not bear on the decomposition, which never uses the bound. Two steps would
+sharpen the picture: executing the specified but unrun per-tensor reference
+cells, which would place both formats against a classical baseline, and an
+ablation separating the intra-block correlation mechanism from other contributors
+to the $u_{\mathrm{eff}}$ residual.

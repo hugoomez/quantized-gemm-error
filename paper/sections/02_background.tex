@@ -1,5 +1,45 @@
-% =====================================================
-% Background — target length: TBD (no prior chat discussion on
-% record establishing this — see main.tex header note).
-% NOT YET WRITTEN.
-% =====================================================
+\section{Background}
+\label{sec:background}
+
+Both deployed FP4 formats store the same elements --- E2M1, with largest finite
+magnitude 6 --- and differ only in how a block of those elements is scaled.
+Table~\ref{tab:formats} states that difference.
+
+\begin{table}[t]
+  \centering
+  \caption{The two block-scaled FP4 formats. Elements are identical; the scaling
+    is the whole of the difference.}
+  \label{tab:formats}
+  \begin{tabular}{@{}l p{3.4cm} p{4.2cm}@{}}
+    \toprule
+                              & MXFP4                          & NVFP4 \\
+    \midrule
+    element format            & E2M1 (1/2/1)                    & E2M1 (1/2/1) \\
+    block size                & 32                             & 16 \\
+    block scale format        & E8M0 (0/8/0), a power of two    & E4M3 (1/4/3) \\
+    global scale              & none                           & one per tensor (FP32) \\
+    scale range               & $2^{-127}$ to $2^{127}$ (255 binades) & $2^{-9}$ to 448 relative to the global scale ($\sim$19 binades) \\
+    scale resolution          & one binade (no mantissa bits)  & 6.25\% (3 mantissa bits) \\
+    clipping of the block max  & impossible by construction     & up to $\sim$6\% \\
+    specification / vendor    & OCP MX v1.0 \citep{ocp2023mx}   & NVIDIA \citep{nvidia2026nvfp4} \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{0.6em}
+  {\footnotesize Blocks run along the contraction axis. The MXFP4 block-scale
+  exponent admits more than one rounding convention in the literature; the one
+  used here is stated in Section~\ref{sec:method}.}
+\end{table}
+
+Researchers currently use established tools to assess the accuracy of this kind of
+product: the classical rounding-error bounds for an inner product. For length $n$
+and unit roundoff $u$, the deterministic worst case is
+$\gamma_n = n\,u/(1-n\,u)$ \citep{higham2002accuracy}, obtained by compounding one
+rounding per accumulation step. A randomized analysis gives a more refined
+estimate for typical cases, changing the leading factor to give a high-probability
+bound of order $\sqrt{n \log n}\,u$ \citep{higham2019new}. Both are stated in
+terms of a single unit roundoff $u$ fixed by the encoding.
+
+The fact that gives this context its urgency is NVIDIA's reported
+36\%-more-tokens gap between the two formats \citep{nvidia2026nvfp4} --- a vendor
+result, reported without an explanation of where the difference comes from.

@@ -1,0 +1,654 @@
+================================================================================
+FINAL_FOR_REVIEW.txt
+Faithful plain-text reverse-port of the CURRENT compiled paper, for human review.
+
+Generated 2026-08-28 from the live LaTeX source:
+  - paper/main.tex           (abstract, title/author/venue metadata)
+  - paper/sections/01..07    (all seven sections)
+
+This reflects the paper EXACTLY as it now compiles. No edits, no rewording, no
+editorial pass -- only mechanical de-LaTeXing. It SUPERSEDES paper/drafts/*,
+which are stale relative to the LaTeX porting and every subsequent trim.
+
+Compiled state at generation: 16 pages total (body Introduction..Conclusion runs
+~0.13 page past the 8-page body target; References on p.9; NeurIPS checklist
+pp.10-16).
+
+Rendering conventions
+  *word*        = \emph{...}  (italic emphasis in the LaTeX)
+  **words**     = \textbf{...}  (bold in the LaTeX)
+  [Name, Year]  = a parenthetical \citep citation (plainnat style; 3+ authors
+                  abbreviated "et al.")
+  Name [Year]   = an in-text \citet citation
+  (Eq. 1/2/3)   = a numbered display equation; the PDF prints these as bare
+                  "(1)", "(2)", "(3)".
+  "Section 3.3", "Figure 1", etc. = resolved cross-references (as the PDF prints
+                  them).
+  Math is written as readable plain text:  nu -> ν,  -> infinity -> ∞,
+                  sqrt(x) = square root,  x-hat = x with a hat,  · = multiply,
+                  <= >= ∈ used directly.
+  [FIGURE n: ...] / [TABLE 1: ...] mark float placement and carry the real
+                  caption text verbatim.
+================================================================================
+
+TITLE   : \title{} is currently EMPTY in main.tex.
+          Draft candidate recorded in a main.tex comment (dated 2026-08-26):
+          "Which Design Choice Explains NVFP4's Edge over MXFP4?
+           A Backward-Error Decomposition"
+AUTHORS : none -- \author{} is empty (double-blind submission).
+VENUE   : \workshoptitle{New in ML at NeurIPS 2026}.
+
+
+================================================================================
+ABSTRACT
+================================================================================
+
+NVIDIA reports that MXFP4 needs 36% more training tokens than NVFP4 to reach the
+same pretraining loss on its own 8B model, but the two formats differ in two ways
+at once, block size and scale format, so that result cannot say which choice is
+responsible. This work separates them. Backward error is measured on a quantized
+GEMM under exact accumulation, isolating input quantization from accumulator
+rounding, with classical rounding-error analysis adapted to block-scaled formats.
+Block size and scale format are crossed in a two-by-two design and swept over
+operand tail weight and contraction length. The scale format moves measured error
+more than the block size does at every canonical cell, and the ranking survives
+stochastic rounding and a random Hadamard transform; the margin narrows sharply
+at the heaviest tail without crossing. The originally planned comparison,
+locating the tail index at which the derived bound first fails, proved
+uninformative: the bound is broken across the entire tested range, which
+motivated the magnitude-based analysis reported here. Against GPT-2 activations
+the predictions transfer closely at two of three layers, with the third traced to
+channel-concentrated outliers.
+
+
+================================================================================
+1  INTRODUCTION
+================================================================================
+
+NVIDIA reports that MXFP4 matches NVFP4's pretraining loss only when trained on
+36% more tokens -- 1.36T against 1T -- on its own 8B hybrid Mamba-Transformer
+model [NVIDIA, 2025]: the vendor's own figure, not independently established
+here, and the observation that motivates this work.
+
+What the figure cannot say is which design choice earns the difference. The two
+formats store identical E2M1 elements and differ in their scaling alone, but they
+differ in two ways at once: NVFP4 scales blocks of 16 elements with an E4M3 scale
+factor, MXFP4 blocks of 32 with a power-of-two E8M0 factor. Any gap measured
+between the two presets is therefore attributable to the block size, to the scale
+format, or to an interaction between them, with no way to tell which from the
+comparison itself.
+
+This work separates them. Block size and scale format are crossed in a 2x2
+factorial design, so either can be held fixed while the other varies. Accuracy is
+measured as the backward error of a quantized GEMM, using classical
+rounding-error analysis adapted to block-scaled formats (Section 3). The design
+is swept over operand tail weight and contraction length, so the comparison rests
+on a grid of configurations rather than on a single measurement.
+
+The scale format, not the block size, is found to be the dominant factor.
+
+
+================================================================================
+2  BACKGROUND
+================================================================================
+
+Both deployed FP4 formats store the same elements -- E2M1, with largest finite
+magnitude 6 -- and differ only in how a block of those elements is scaled.
+Table 1 states that difference.
+
+[TABLE 1 -- placed at the top of the section.
+ Caption: "The two block-scaled FP4 formats. Elements are identical; the scaling
+ is the whole of the difference."]
+
+                             |  MXFP4                          |  NVFP4
+  ---------------------------+---------------------------------+-------------------------------------------------------
+  element format             |  E2M1 (1/2/1)                   |  E2M1 (1/2/1)
+  block size                 |  32                             |  16
+  block scale format         |  E8M0 (0/8/0), a power of two   |  E4M3 (1/4/3)
+  global scale               |  none                           |  one per tensor (FP32)
+  scale range                |  2^-127 to 2^127 (255 binades)  |  2^-9 to 448 relative to the global scale (~19 binades)
+  scale resolution           |  one binade (no mantissa bits)  |  6.25% (3 mantissa bits)
+  clipping of the block max   |  impossible by construction     |  up to ~6%
+  specification / vendor     |  OCP MX v1.0                    |  NVIDIA
+                             |  [Open Compute Project          |  [NVIDIA, 2025]
+                             |   Foundation (MX Alliance), 2023]|
+
+  Table footnote: Blocks run along the contraction axis. The MXFP4 block-scale
+  exponent admits more than one rounding convention in the literature; the one
+  used here is stated in Section 3.
+
+Researchers currently use established tools to assess the accuracy of this kind of product.
+the classical rounding-error bounds for an inner product. For length n and unit
+roundoff u, the deterministic worst case is gamma_n = n·u / (1 - n·u)
+[Higham, 2002], obtained by compounding one rounding per accumulation step.
+A randomized analysis gives a more refined estimate for typical cases, changing the leading factor.
+give a high-probability bound of order sqrt(n log n)·u [Higham and Mary, 2019].
+Both are stated in terms of a single unit roundoff u fixed by the encoding.
+
+The fact that gives this context its urgency is NVIDIA's reported 36%-more-tokens
+gap between the two formats [NVIDIA, 2025] -- a vendor result, reported without
+an explanation of where the difference comes from.
+
+================================================================================
+3  METHOD
+
+---
+
+3.1  Setup: Backward Error with Exact Accumulation
+
+The measurement device is a quantized GEMM. For matrices A (M x n) and B (n x N),
+both are quantized using a block-scaled low-precision format along the contraction
+dimension n, and the resulting float64 reconstructions – the dequantized
+The values, not the integer representations, are multiplied. The accuracy is
+assessed elementwise using the backward error [Rasquinha and Tabak, 2023]
+
+(Eq. 1)   BE_ij  =  | (AB)_ij - C-hat_ij |  /  ( |A|·|B| )_ij
+
+In this case, C-hat stands for the quantized product, and the absolute value operation is applied element by element.
+denominator is calculated using the product of absolute values, not |AB|; the two
+differ when the exact product involves cancellation.
+
+The main approach accumulates the reconstructions exactly, in float64 – a
+was a deliberate design choice. A low-precision GEMM has two kinds of error: errors in the operands
+snapped onto a coarse grid, and partial sums rounded in a narrow accumulator;
+combined, they obscure which one drives the measurement. Exact accumulation
+removes the second, so the residual C-hat - AB in (Eq. 1) is input-quantization
+error alone. A bfloat16 accumulator is a secondary option, excluded from this
+Grid's analysis and this was not included in the primary results.
+
+Operands have i.i.d. t-Student(ν) entries – smaller ν meaning heavier tails,
+ν -> ∞ the Gaussian case – each tensor normalized to unit median absolute
+There is a deviation, since the standard deviation is not defined when ν is less than or equal to 2.
+
+---
+
+3.2  Reasons the Classical Bound Does Not Apply
+
+The classical worst-case backward-error bound for a length-n inner product is
+gamma_n = n·u / (1 - n·u) under unit roundoff u [Higham, 2002]. Two probabilistic
+results relax that leading factor, each a high-probability upper bound rather than
+a statement about typical growth. Higham and Mary replace gamma_n by a relaxed
+constant of order sqrt(n log n)·u, holding with a probability bounded below, for
+rounding errors modelled as mean-independent random variables [Higham and Mary,
+2019]; Connolly, Higham and Mary prove a sqrt(n)·u bound with no log factor,
+unconditionally, for stochastic rounding specifically [Connolly et al., 2021].
+The two cover different rounding regimes rather than refining one another.
+
+The n-dependence of both families stems specifically from repeated rounding
+during accumulation: a single rounding occurs during every summation step,
+totaling n, either compounding in the worst case (gamma_n) or behaving as a
+random walk (sqrt(n)·u). Exact accumulation removes that mechanism, so neither
+bound’s n-dependence applies here. Additionally, a block-scaled format does not
+provide a fixed u to replace: the classical unit roundoff is half an ulp based on
+a grid defined by the encoding, while here, the grid that an element occupies is
+determined by the largest magnitude in its own block, resulting in the achieved
+relative error being a distribution rather than an attribute of the format.
+
+---
+
+3.3  A Measured Unit Roundoff, and the Constructed Bound
+
+The quantity that substitutes for u is measured directly. For a specific element
+format, block size, scale format, and tail index ν, define
+
+(Eq. 2)   u_eff(format, block, ν)  =  median over i of  ( |x_i - x-hat_i| / |x_i| )
+
+This is the median per-element relative quantization error for that ν and
+configuration; its 99th percentile is recorded alongside. Estimation uses a
+distinct calibration draw from an independent stream, so the denominator in the
+ratio tested below is never taken from the sample it is evaluated against.
+
+Relative error is ill-defined as x_i -> 0, and “near zero” is meaningful only
+relative to an element’s own effective scale s_eff (block scale times global
+scale, where one is used), since block scales span many orders of magnitude
+across a heavy-tailed tensor. Elements with |x_i| <= 0.25·s_eff are therefore
+excluded. The threshold is not tuned: E2M1’s smallest nonzero magnitude is
+0.5·s_eff, so under round-to-nearest any element at or below 0.25·s_eff quantizes
+to exactly zero with relative error 1 – the format’s dynamic-range floor, not
+its correctness. That the cut is necessary was checked, not assumed: with it
+disabled, all 32 measured configurations return p99 = 1.00000 exactly. Its price
+is a large, configuration-dependent exclusion – surviving fractions range from
+0.360 (MXFP4 at ν = 1) to 0.932 (NVFP4 at the Gaussian end) – tabulated wherever
+u_eff is reported.
+
+With exact accumulation, the error at the output entry (i,j) consists of a sum of
+n one-time input-quantization errors with essentially random signs, such that
+partial cancellation results in its growth resembling sqrt(n) instead of n, while
+the denominator in Equation (1), which is the sum over k of |A_ik| times |B_kj|, involves n strictly positive terms.
+The terms increase and grow approximately linearly in the case of well-behaved inputs. Together, these
+result in BE ~ sqrt(n)·u_eff / n, leading to the tested bound
+
+(Eq. 3)   beta(n, format, block, ν)  =  c · u_eff(format, block, ν) / sqrt(n)
+
+which decays in n rather than grows. This is an order-of-magnitude argument of
+the central-limit/law-of-large-numbers kind, not a proven tight inequality, and
+is not offered as a theoretical contribution: both premises require moments the
+heaviest tails swept here lack, and at ν = 1 (Cauchy) the reasoning is expected
+to break down – a limit of its assumptions, not a defect in the form of (Eq. 3).
+
+The constant c is predetermined at c = 1 for all supporting analyses, in
+accordance with the anti-circularity principle established in the preregistration
+of this study: a bound whose constant is fitted to the data it evaluates cannot
+be refuted by that same data. Adopting a unit leading constant is consistent with
+the tradition of probabilistic rounding analyses, which replace n·u with
+sqrt(n)·u in a deterministic factor without introducing a fitted constant
+[Connolly et al., 2021]. Given that the calculation is order-of-magnitude rather
+than tight, a poorly calibrated c = 1 serves as a reportable finding instead of
+justification for recalibration; any estimation of c-hat derived from data is still descriptive and exploratory, not reintegrated into the confirmatory
+ratio.
+
+The bound is deemed broken at (format, ν, n) when the lower limit of the 95%
+bootstrap confidence interval of the median of BE/beta(n) exceeds 1.0: indicating
+when the error reduces at a rate that is notably slower than anticipated
+by the cancellation rate, rather than simply exceeding a growing worst-case
+The fact that u_eff is a function of ν means that both sides of this ratio change as ν varies.
+testing whether the scaling law endures despite heavy tails, rather than
+evaluating whether heavy tails increase absolute error.
+
+---
+
+3.4  Factorial design
+
+Because MXFP4 and NVFP4 differ in block size and scale format at once, the design
+crosses the two factors – block size in {16, 32}, scale format in {E8M0, E4M3}
+– so either can be held fixed while the other varies. This 2x2 setup is the main
+causal comparison. The element format is E2M1 everywhere, since both real formats
+use it, so scaling is the only thing that changes. The per-tensor global scale
+comes from the scale format rather than being varied separately. E8M0 covers 255
+binades and can reach any block’s magnitude on its own, while E4M3 covers about
+19 and overflows to NaN when one is not provided. The rounding performed by this project for the MXFP4 block scale
+exponent up rather than down (OCP/microxcaling’s default), matching NVIDIA’s own
+stated training practice [NVIDIA, 2025] and verified bit-exact against
+microxcaling in this project’s own testing.
+
+Two of the four combinations are real formats. Block 32 with an E8M0 scale is
+MXFP4, and block 16 with an E4M3 scale is NVFP4. The other two, block 16 with
+E8M0 and block 32 with E4M3, are experimental controls. They do not correspond
+to any hardware, specification, or vendor format, and exist only as measurement
+tools to make the comparison between the two real formats clear. This paper does
+not propose, endorse, or benchmark them as formats, and the results tables keep
+this distinction clear.
+
+Rounding mode (either round-to-nearest-even or stochastic) and a random Hadamard
+transform (on or off) are secondary factors and are not part of the main causal
+comparison. The transform is applied to each block along the contraction
+dimension with the same random signs on both operands. This way, it cancels out
+inside every inner product and does not need inversion.
+
+These four factors are combined with the tail index, which runs over
+ν in {1, 2, 3, 5, 8, 15, 30} together with the Gaussian limit, and with the
+contraction dimension n in {16, 64, 256, 1024, 4096}, creating a grid of
+8 x 5 x 2^4 = 640 cells, all using exact accumulation. The primary contraction
+dimension is n = 4096. It was not fixed in advance: it was declared post hoc in a
+dated preregistration amendment, filed before any confirmatory ν* analysis was
+run but after the sweep itself and its n-scaling slope fits were already
+complete, on the stated grounds that 4096 is closest to real GEMM shapes in
+language-model workloads and is the n at which the sqrt(n)-decay derivation’s
+
+asymptotic assumptions are most likely to be valid. The remaining four values are used as
+stability checks, reported as a separate sensitivity table and never substituted
+for it. Trial counts are adaptive. There are 5000 trials per cell at
+ν in {1, 2, 3}, where quantile estimates are noisiest and the bound is most
+likely to break, and 1000 trials per cell for the lighter tails, making a total
+of 1.6 million trials.
+
+---
+
+3.5  Robust statistical protocol
+
+Each trial provides a  summary of its own M x N backward-error matrix, and the
+trial is the resampling unit throughout, never the individual matrix element.
+Elements within a block share a scale factor, are not exchangeable, and would
+give anticonservative intervals that inflate the measured break rate. Confidence
+intervals use the percentile bootstrap, with B = 10,000 resamples and an
+explicitly seeded generator, and are reported as computed rather than forced to
+be symmetric.
+
+The median and 90th percentile carry all confirmatory statistical weight. The
+99th percentile is reported for every cell but is only indicative, at any trial
+count used here. The reason is a measured coverage gap, not a generic caveat
+about percentile bootstraps. A cell’s p99 is determined by roughly its top 1% of
+values (10 out of 1000 trials, 50 out of 5000), and a percentile bootstrap
+resamples with replacement from the observed sample, so it can reweight those
+values but can never produce a value more extreme than the largest already drawn.
+A coverage simulation measures this: 1000 simulated experiments per cell,
+t-Student(ν = 2), both trial budgets, nominal 95%. Median coverage is 95.5% at
+1000 trials and 94.8% at 5000, which is close to nominal at both. The p99
+coverage is 92.7% and 94.0%, which is below the median’s at both budgets and
+about 3.5 standard errors less than nominal at 1000 trials. The gap is real and in
+the direction the mechanism forecasts, but modest, not a collapse. More trials
+help p99 measurably without closing it – hence the indicative-only status at
+every trial count.
+
+================================================================================
+4  RESULTS
+
+---
+
+4.1  The Scaling Mechanism, Confirmed Where Its Assumptions Hold
+
+[FIGURE 1 and FIGURE 3 – placed together here as a side-by-side two-up row at
+the top of Section 4.1, each about 0.42 of the document width. They carry the
+numbers 1 and 3: Figure 2 (the causal heatmap) is defined later, in Section
+4.2, but is numbered before Figure 3 because it is cited first.
+
+FIGURE 1  (source file: figures/figure2_n_scaling)
+Caption: “Measured median(BE) against contraction length n (log-log) for
+MXFP4 and NVFP4 at ν = 1 and the Gaussian limit, against the obtained
+u_eff/sqrt(n) slope -0.5 and the classical gamma_n slope +1 (shown for
+contrast, inapplicable under exact accumulation); the heavy tail decays far
+more slowly than -0.5.”
+
+FIGURE 3  (source file: figures/figure1_nu_star)
+Caption: “Median BE/beta(n) at n_primary = 4096 versus tail index for all
+four block-size x scale-format arms; every curve sits above the ratio-1
+threshold across the whole range, by 20-30x at ν = 1 and ~50-60% at the
+Gaussian limit.”]
+
+The empirical log-log slope of median(BE) against n is fitted by ordinary least
+squares for each of the 128 sub-configurations of the sweep – 8 tail indices x 2
+block sizes x 2 scale formats x 2 rounding modes x 2 Hadamard settings – over
+that configuration’s own 5 values of n, with a 95% interval from 2000 bootstrap
+replicates resampling each n’s trials independently. The reference is the
+exponent -0.5 of (Eq. 3).
+
+No configuration’s interval contains -0.5. All 128 lie entirely above it: the
+error decays with n, but more slowly than the cancellation regime predicts. None
+decays faster, and none has a positive slope, so error grows with n nowhere in
+the grid. That unanimity alone overstates the finding, however. It rests on a
+significance test, and at 1000-5000 trials per cell the intervals exclude -0.5
+even when the point estimate misses it by a few thousandths. Splitting by
+magnitude instead, at |slope - (-0.5)| > 0.02, separates the two readings:
+63 of the 128 configurations deviate materially from -0.5, and 65 do not.
+
+The split is ordered by tail weight, and the deviation shrinks smoothly and
+monotonically as the tail lightens. At ν in {1, 2, 3} every one of the 16
+sub-configurations is material, with gaps from 0.041 to 0.490; the extreme is
+ν = 1, where the fitted slopes run from -0.010 to -0.139, one to two orders of
+magnitude shallower than predicted rather than borderline. At ν in {5, 8} the
+sub-configurations straddle the threshold, some above and some below, consistent
+with a smooth transition rather than a sharp cutoff. At ν in {15, 30, Gaussian}
+none is material at any configuration, the gap staying between 0.004 and 0.020.
+
+The split follows the derivation itself’s own premises. Section 3.3 obtained the -0.5
+exponent from a mean-zero numerator behaving like a random walk and a denominator
+obeying a law of large numbers – both resting based on moments the heaviest tails here
+lack; at ν = 1 the t-Student is Cauchy, with neither finite mean nor variance.
+The exponent is recovered to within two hundredths exactly where those moments
+exist, and departs from it exactly where they do not (Figure 1).
+
+---
+
+4.2  Scale Format, Not Block Size, Is the Larger Lever
+
+The 2x2 design is read directly off the measured backward error, with no
+theoretical bound involved at any point: no beta(n), no c, no ratio to 1. This partition is exploratory and post-hoc, adopted under a dated preregistration
+amendment (Sec. 8.4) once the preregistered confirmatory comparison – P1-P3 of
+Sec. 4, all framed in terms of ν* – was left undefined by the finding of Section
+4.3. For each combination of tail index, contraction dimension, rounding mode and
+Hadamard setting, three statistics are formed in log space,
+
+effect_block  =  median(log BE | block=16)   -  median(log BE | block=32)
+effect_scale  =  median(log BE | scale=E4M3) -  median(log BE | scale=E8M0)
+interaction   =  [ (16,E4M3) - (32,E4M3) ]   -  [ (16,E8M0) - (32,E8M0) ]
+
+each marginal effect aggregating over the other factor, with a 95%
+percentile-bootstrap interval from 2000 replicates resampling all four underlying
+cells in one shared pass. Neither the tail index nor n is collapsed.
+
+Scale format moves the measured error more than block size does at every one of
+the 40 canonical cells (8 ν x 5 n, round-to-nearest, no Hadamard transform),
+and the ranking survives the secondary factors: scale format leads in 34 of 40
+cells with the Hadamard transform on, 38 of 40 during stochastic rounding, and 35
+of 40 with both, never reversing to an overall block-size majority in any of the
+four combinations. At n = 4096, canonically, effect_scale ranges from -0.162 at
+the Gaussian end to -0.389 at ν = 2, against -0.042 to -0.246 for effect_block: a
+pull two to four times larger across the grid (Figure 2). Both effects are
+negative at every n >= 64, so block = 16 and E4M3 – NVFP4’s two choices – each
+reduce measured error relative to their alternatives, and the larger of the two
+reductions is the scale format.
+
+The ranking is identical at all 5 values of n, at every ν, with no crossing
+anywhere in the grid, so the practical answer here – unlike the threshold
+analysis of Section 4.3 – does not depend on which n had been designated
+primary. The n = 16 column is the apparent exception, and it is not measuring
+block size at all: zero-padding leaves max|x| unchanged, so a nominal block size
+of 32 spans the same 16 elements, with the same scale, as block size 16 does. The
+effect first becomes measurable at n = 64, where the two arms are genuinely
+different quantizers, and is essentially flat through n = 4096 (at ν = 1: -0.286,
+-0.270, -0.257, -0.246).
+
+The margin between the two factors is not uniform, and it is thinnest at the
+heaviest tail. Written as |effect_scale| - |effect_block|, it is 0.016 to 0.043
+at ν = 1 for n >= 64, against 0.124 to 0.135 at ν = 15 – a four- to eightfold
+narrowing – and the narrowing is confined to ν = 1, since at ν = 2 the margin is
+0.16 to 0.19, the widest of the three tail indices examined. The margin narrows
+sharply at ν = 1 but does not cross. Point estimates never flip at any of the
+40 canonical cells, and at n = 4096 the intervals do not overlap:
+|effect_block| in [0.2395, 0.2510] against |effect_scale| in [0.2719, 0.2831].
+
+This only partly fits the per-element picture. On u_eff (the 2x2 applied to
+elementwise rather than end-to-end error), the block-size effect leads at ν = 1
+and the two cross by ν = 2; in backward error the direction replicates but the
+crossing does not, the scale-format lead narrowing toward ν = 1 without
+reversing.
+
+The two factors are not purely additive: the interaction term is significant at
+essentially every cell with n >= 64, from -0.095 at ν = 1 to -0.028 at the
+Gaussian end at n = 4096. It is not folded into the dominance comparison above,
+which uses the pooled marginal effects.
+
+[FIGURE 2  (source file: figures/figure3_causal_heatmap) – placed here, after
+the interaction-term paragraph; full width (about 0.88 in the text width),
+centered.
+Caption: “median(BE) over the block size x tail index grid at fixed n = 4096,
+split by scale format (E8M0 vs. E4M3); changing the scale format shifts the
+cells more than changing the block size at every ν.”]
+
+---
+
+4.3  Why the Analysis Is Framed by Magnitude and Not by a Threshold
+
+That decomposition replaced a preregistered plan: locate ν*, the tail index at
+which beta(n) first fails by the criterion of Section 3.3, for each of the 16
+families, and compare the two block sizes by where their ν* falls.
+
+The bound is broken at every one of the 8 tested tail indices, in every one of
+the 16 families, at n_primary = 4096, and 0 of the 16 is non-monotone, so ν* is not simply hard to locate but undefined everywhere on this grid. For the two
+named presets, canonically, the median ratio at ν = 1 is 31.92 [31.85, 31.97] for
+MXFP4 and 20.91 [20.85, 20.97] for NVFP4, against 1.588 [1.585, 1.590] and 1.515
+[1.513, 1.517] at the Gaussian limit. Even in the near-Gaussian regime, which the
+
+calculation’s assumptions fit best, the interval sits entirely above 1: c = 1
+under-predicts the measured error by roughly 50 to 60% there, and by a factor of
+20 to 32 at ν = 1 (Figure 3).
+
+This is not an artifact of the primary contraction dimension: the same pattern
+holds at all 5 values of n, 16 of 16 families censored above and 0 below at each.
+For MXFP4 at ν = 1 the ratio is already 3.55 at n = 16 and rises through 7.18,
+12.10 and 19.62 to 31.92 at n = 4096, growing in line with the
+shallower-than-(-0.5) exponent of Section 4.1 rather than closing.
+
+The preregistration anticipates this outcome: its all-cells-censored-above
+contingency states the tail range was mis-specified, the hypothesis untestable on
+such a grid, and the result to be reported as a grid mis-specification, not a
+confirmation. It is equally not a null – the rank comparison returns equal
+fragility for the two block sizes only because every rank is pinned at the
+ceiling, the signature of a saturated measurement. The two confirmatory results
+therefore separate cleanly: the functional form of (Eq. 3) is well supported at
+ν >= 15 (Section 4.1), while its leading constant, fixed at c = 1 by the
+anti-circularity constraint of Section 3.3, is not calibrated anywhere in the
+tested range.
+
+With no ν* to locate, block size and scale format could not be compared through
+the bound at all – both sides are censored past the edge of what was measured.
+This is why Section 4.2 addresses the same practical question directly from
+measured magnitudes, rather than through the threshold criterion above.
+
+================================================================================
+5  VALIDATION WITH REAL ACTIVATIONS
+================================================================================
+
+The t-Student model underlying every result above was checked against the
+activations a real network produces. GPT-2 small was run over 300 non-empty lines
+of the WikiText-2 raw test split, giving 34,390 valid tokens, and activations
+were captured at three of its twelve transformer blocks -- h0, h6 and h11, the
+first, middle and last -- all at the attention input projection (attn.c_attn), so
+that depth is the only thing varying across the three. Padded positions are
+removed before any statistic or GEMM operand sees them. Tail weight is summarized
+by excess kurtosis in Fisher's convention, in which a Gaussian is 0 and not 3,
+computed over the full flattened tensor as a single distribution.
+
+Each layer's excess kurtosis k is mapped to an equivalent tail index through
+ν = 4 + 6/k, the closed-form inverse of a t-Student's k = 6/(ν - 4), which is
+defined only for ν > 4. The out-of-domain case is k <= 0, which no t-Student
+attains and which the code reports as N/A with a stated reason rather than
+extrapolating; it did not arise at any layer, though h6's ν = 4.06 sits within
+0.06 of the boundary. The quantized-GEMM pipeline of Section 3.1 is then run
+twice per layer and preset: once on the real activations, once on a synthetic
+t-Student(ν) draw of identical shape, rescaled so its median absolute deviation
+equals the real tensor's. The layer's own weight matrix serves as operand B in
+both arms, so the two runs differ only in operand A's tail shape.
+
+Four of the six layer-preset cells land within 10% of the t-Student prediction,
+and none falls outside 50%. At h0 (excess kurtosis 1.02, ν = 9.88) and h11 (7.03,
+ν = 4.85) the observed median(BE) equals the predicted value to within 2-4%
+under both presets: observed/predicted ratios of 0.997 and 0.987 at h0, 1.041 and
+0.994 at h11. Layer h6 misses. Its excess kurtosis is 101.9, two orders of
+magnitude beyond the other two layers, its equivalent ν is 4.06, and its observed
+error runs 38% (MXFP4) and 23% (NVFP4) *higher* than predicted. The direction is
+the informative part: the real activations produce *more* backward error than a
+MAD- and kurtosis-matched synthetic draw, so a single matched scalar
+under-describes how concentrated h6's outlier mass is.
+
+A targeted diagnostic on h6's own tensor, with no GEMM rerun, locates that
+concentration. The twenty largest activation magnitudes in the entire
+34,390 x 768 tensor fall in exactly one channel, index 64, across twenty distinct
+tokens. Within the top-1% pool the same channel accounts for 13.0% of the mass
+and appears for all 34,390 tokens, the five most frequent channels for 58.2%, and
+the top ten for 75.3%; per-channel maxima drop sharply after a handful (8.06,
+7.08, 6.55, 5.31, then 2.76 for the next channel down). This is the
+massive-activations pattern documented in transformer hidden states
+[Sun et al., 2024], and it violates an assumption the synthetic model makes
+implicitly: that large values are randomly located and redrawn every sample,
+where h6's are fixed to the same few channels on essentially every token. The
+measured value also falls in a gap this study's own ν-grid never samples:
+ν in {1, 2, 3} have undefined population excess kurtosis, outside the closed
+form's ν > 4 domain, while ν >= 5 tops out at 6 for the heaviest finite-kurtosis
+grid point -- so 101.9 is finite but far past any value the grid covers. Whether
+that framework mechanistically drives the 23-38% gap, rather than merely
+associated with it, is not established here -- no ablation separating channel
+structure from the kurtosis match was run, and none is claimed.
+
+This check is exploratory and bears on none of the confirmatory comparisons. It
+tests the study's modeling choice, not any hypothesis about the formats, and
+finds it sound across most of a real network -- failing only under extreme,
+channel-concentrated kurtosis, where a single kurtosis-matched ν is insufficient.
+
+
+================================================================================
+6  RELATED WORK AND LIMITATIONS
+================================================================================
+
+This work builds directly on the backward-error methodology of Rasquinha and
+Tabak [2023], extending it to block-scaled formats and heavy-tailed operands. Two
+recent works approach FP4 microscaling from other directions. Fasoli et al.
+[2026] also measures block-size effects on model correctness, but attributes
+degradation to *narrow* tensor distributions -- the opposite regime from the
+heavy tails swept here. Egiazarian et al. [2026] analyses MXFP4 and NVFP4 error
+under a Laplace operand model scored by per-element MSE, differing from this work
+in both metric and operand model.
+
+Six scope limits qualify these results. (i) The three per-tensor reference
+formats -- FP8-E4M3, FP8-E5M2 and INT8 -- are in the frozen grid but never
+executed, leaving MXFP4 and NVFP4 without a classical per-tensor baseline.
+(ii) The random Hadamard transform is applied per block: a global, whole-row
+transform would spread energy over sqrt(n), tying its effect to the same n whose
+scaling law is under study, so global RHT is not evaluated here. (iii)
+Quantization is CPU emulation in float64, not real quantized hardware. (iv) Only
+E2M1 elements are studied. (v) Elements sharing a block share a scale, so their
+errors are correlated rather than independent -- the leading candidate behind the
+u_eff residual, consistent with a survival-fraction gap whose rank order against
+the u_eff block-size excess is perfect across all eight ν (Spearman 1.0), but not
+isolated by a dedicated ablation. (vi) The fixed c = 1 is fixed a priori for
+anti-circularity, so what is characterized is the bound's functional *form*, not
+a calibrated absolute value.
+
+
+================================================================================
+7  CONCLUSION
+================================================================================
+
+Two design choices separate NVFP4 from MXFP4, and they do not contribute equally.
+Across the full grid of tail weights and contraction lengths, the scale format
+moves the measured backward error more than the block size does, at every
+canonical cell, and the ranking survives both secondary factors -- stochastic
+rounding and the random Hadamard transform -- without reversing anywhere. The
+margin narrows at the heaviest tail without crossing. This is a post-hoc
+decomposition of measured magnitudes, not a preregistered test, and it involves
+no theoretical bound at any point.
+
+That last property is what the threshold analysis leaves behind. The constructed
+bound breaks across the whole tested range, so the tail index at which it first
+fails is undefined everywhere on this grid, and could not carry the planned
+comparison; that null motivated the pivot to comparing magnitudes directly, and
+does not bear on the decomposition, which never uses the bound. Two steps would
+sharpen the picture: executing the specified but unrun per-tensor reference
+cells, which would place both formats against a classical baseline, and an
+ablation separating the intra-block correlation mechanism from other contributors
+to the u_eff residual.
+
+
+================================================================================
+REFERENCES  (the 9 works cited above; keys as in paper/refs.bib)
+================================================================================
+Note: GPT-2 and WikiText-2 are named in Section 5 but not formally cited, so they
+do not appear in the compiled reference list.
+
+[NVIDIA, 2025]  (key: nvidia2026nvfp4)
+    NVIDIA. Pretraining Large Language Models with NVFP4. arXiv preprint
+    arXiv:2509.25149, 2025. (note: v2 2026)
+
+[Open Compute Project Foundation (MX Alliance), 2023]  (key: ocp2023mx)
+    Open Compute Project Foundation (MX Alliance). OCP Microscaling Formats (MX)
+    Specification Version 1.0. Open Compute Project Foundation, 2023.
+
+[Higham, 2002]  (key: higham2002accuracy)
+    Nicholas J. Higham. Accuracy and Stability of Numerical Algorithms. SIAM,
+    2nd edition, 2002.
+
+[Higham and Mary, 2019]  (key: higham2019new)
+    Nicholas J. Higham and Theo Mary. A New Approach to Probabilistic Rounding
+    Error Analysis. SIAM Journal on Scientific Computing, 41(5):A2815-A2835,
+    2019. doi:10.1137/18M1226312.
+
+[Rasquinha and Tabak, 2023]  (key: rasquinha2023metric)
+    Mitchelle Rasquinha and Gil Tabak. A Metric Driven Approach to Mixed
+    Precision Training. Architecture and System Support for Transformer Models
+    (ASSYST), ISCA, 2023. arXiv:2408.02897.
+
+[Connolly et al., 2021]  (key: connolly2021stochastic)
+    Michael P. Connolly, Nicholas J. Higham, and Theo Mary. Stochastic Rounding
+    and its Probabilistic Backward Error Analysis. SIAM Journal on Scientific
+    Computing, 43(1):A566-A585, 2021. doi:10.1137/20M1334796.
+
+[Fasoli et al., 2026]  (key: fasoli2026finer)
+    Andrea Fasoli, Monodeep Kar, Chi-Chun Liu, Swagath Venkataramani, Viji
+    Srinivasan, Leland Chang, and Naigang Wang. Is Finer Better? The Limits of
+    Microscaling Formats in Large Language Models. ICLR, 2026.
+    (note: arXiv:2601.19026, IBM Research)
+
+[Egiazarian et al., 2026]  (key: egiazarian2026bridging)
+    Vage Egiazarian, Roberto L. Castro, Denis Kuznedelev, Andrei Panferov, Eldar
+    Kurtic, Shubhra Pandit, Alexandre Marques, Mark Kurtz, Saleh Ashkboos,
+    Torsten Hoefler, and Dan Alistarh. Bridging the Gap Between Promise and
+    Performance for Microscaling FP4 Quantization. ICLR, 2026.
+    (note: arXiv:2509.23202)
+
+[Sun et al., 2024]  (key: sun2024massive)
+    Mingjie Sun, Xinlei Chen, J. Zico Kolter, and Zhuang Liu. Massive
+    Activations in Large Language Models. arXiv preprint arXiv:2402.17762, 2024.
+
+================================================================================
+END OF REVERSE-PORT
+================================================================================

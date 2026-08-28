@@ -1,0 +1,1585 @@
+===============================================================================
+FULL_DRAFT.txt  --  concatenacion para lectura seguida. NO EDITAR AQUI.
+===============================================================================
+
+Generado el 2026-08-26 juntando los ocho ficheros de paper/drafts/ en
+orden de lectura. Es un fichero de usar y tirar: no esta bajo control de
+version y se regenera cuando haga falta.
+
+LOS ORIGINALES SON LOS FICHEROS POR SECCION. Cualquier cambio escrito
+aqui se pierde en la siguiente regeneracion. Para corregir algo, dime la
+etiqueta del parrafo ([3.2-P1], [6-P2]...) y lo toco en su fichero.
+
+Contenido intacto: esto es concatenacion byte a byte, sin recortes ni
+renumeraciones. Cada fichero conserva su cabecera y sus notas >>.
+
+
+===============================================================================
+=== ABSTRACT ===
+=== paper/drafts/00_abstract.txt
+===============================================================================
+
+===============================================================================
+ABSTRACT  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/main.tex, dentro de \begin{abstract}...\end{abstract}
+(ahora mismo el bloque no existe todavia). Este .txt es la version editable.
+Cuando lo revises y lo modifiques, yo lo paso al .tex; el .tex no se toca
+hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. Un solo parrafo, sin etiquetas:
+    es la convencion de abstract y no hace falta trocearlo.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+
+ESTADO ACTUAL
+  - Longitud: 195 palabras, dentro del objetivo de 150-200, con 5 de
+    margen. Historia: 199 en la primera version, 190 tras recortar
+    fraseo, 195 tras restaurar "on its own 8B model" el 2026-08-26.
+  - Sin citas, por convencion. La cifra de NVIDIA se atribuye en prosa.
+  - Ningun numero de Results salvo el 36% del gancho.
+  - No compilado.
+
+
+===============================================================================
+ABSTRACT
+===============================================================================
+
+NVIDIA reports that MXFP4 needs 36% more training tokens than NVFP4 to reach
+the same pretraining loss on its own 8B model, but the two formats differ in
+two ways at once,
+block size and scale format, so that result cannot say which choice is
+responsible. This work separates them. Backward error is measured on a
+quantized GEMM under exact accumulation, isolating input quantization from
+accumulator rounding, with the classical rounding-error framework adapted to
+formats whose grid is set per block rather than by the encoding. Block size
+and scale format are crossed in a two-by-two design and
+swept over operand tail weight and contraction length. The scale format moves
+measured error more than the block size does at every canonical cell, and the
+ranking survives stochastic rounding and a random Hadamard transform; the
+margin narrows sharply at the heaviest tail without crossing. The originally
+planned comparison, locating the tail index at which the derived bound first
+fails, proved uninformative: the bound is broken across the entire tested
+range, which motivated the magnitude-based analysis reported here. Against
+GPT-2 activations the predictions transfer closely at two of three layers,
+with the third traced to channel-concentrated outliers.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> TU PREGUNTA SOBRE EL MATIZ POST-HOC: mi respuesta es que a nivel de
+>> abstract NO hace falta repetirlo, y no porque quepa omitirlo, sino porque
+>> la frase del bound YA lo dice en la practica. El abstract afirma que la
+>> comparacion planeada no sirvio y que "that outcome motivated the
+>> magnitude-based analysis reported here": eso es exactamente decir que el
+>> analisis que da el titular se adopto DESPUES, a la vista de que el
+>> planeado no funcionaba. Un lector no puede salir de ahi creyendo que la
+>> descomposicion 2x2 era el plan preregistrado. Si quitaras esa frase, el
+>> matiz si haria falta explicito; con ella, no. [4.2-P1] y [7-P1] lo dicen
+>> con todas las letras a nivel de cuerpo, que es donde toca.
+
+>> EL 36% ES EL UNICO NUMERO DE FUERA QUE ENTRA, y va atribuido en prosa
+>> ("NVIDIA reports that... on its own 8B model") porque en abstract no se
+>> citan claves. Eso cumple la regla de refs.bib ("never as independent
+>> fact") sin \citep: la frase dice de quien es el numero y sobre que modelo
+>> se midio. El "on its own 8B model" se restauro el 2026-08-26 para igualar
+>> el nivel de cautela de [1-P1], que dice "on its own 8B hybrid
+>> Mamba-Transformer model"; aqui va la version corta por espacio.
+
+>> "two of three layers" es el unico dato de la Seccion 5 que doy. No digo
+>> ni h6, ni el 23-38%, ni las cifras de concentracion de canal. La primera
+>> version decia "explained by channel-concentrated outliers"; el 2026-08-26
+>> se cambio a "traced to", que es la formulacion mas debil y la que encaja
+>> con lo que la Seccion 5 declara de verdad: mecanismo plausible y
+>> divulgado, NO probado, sin ablacion que aisle la estructura de canal.
+>> "Traced to" describe donde apunta la evidencia; "explained by" sonaba a
+>> causa establecida.
+
+>> LO QUE NO CABE EN 191 PALABRAS, por si lo echas de menos: el resultado de
+>> la Seccion 4.1 (el exponente -0.5 se recupera donde existen los momentos
+>> y no donde no), que es el otro hallazgo confirmatorio del paper. Lo he
+>> dejado fuera porque el encargo pedia el titular causal y el abstract ya
+>> lleva cinco movimientos. Entra en ~25 palabras si lo quieres, pero
+>> entonces hay que recortar en otro sitio para no pasar de 200.
+
+>> DESTINO EN EL .TEX: main.tex no tiene todavia bloque \begin{abstract}.
+>> Al portar hay que crearlo, entre \maketitle y \section{Introduction}.
+>> Lo mismo que con las secciones: no lo toco hasta que revises esto.
+
+
+
+===============================================================================
+=== 1. INTRODUCTION ===
+=== paper/drafts/01_introduction.txt
+===============================================================================
+
+===============================================================================
+INTRODUCTION  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/01_introduction.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [1-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 1-P4", "en 1-P2 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 264 palabras (P1 40, P2 87, P3 123, P4 14), contra un objetivo
+    de ~300 (0.4p x 745 palabras/pagina). Quedan ~36 palabras sin gastar,
+    tras comprimir la atribucion del 36% en [1-P1] (58 -> 40).
+  - Cuatro parrafos, uno por beat, en el orden que fijaste. Sin nu*, sin
+    numeros de Results, sin validacion, sin related work, sin limitaciones.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+1. INTRODUCTION
+===============================================================================
+
+
+[1-P1]
+NVIDIA reports that MXFP4 matches NVFP4's pretraining loss only when trained
+on 36% more tokens -- 1.36T against 1T -- on its own 8B hybrid
+Mamba-Transformer model {{cita: nvidia2026nvfp4}}: the vendor's own figure,
+not independently established here, and the observation that motivates this
+work.
+
+[1-P2]
+What the figure cannot say is which design choice earns the difference. The
+two formats store identical E2M1 elements and differ in their scaling alone,
+but they differ in two ways at once: NVFP4 scales blocks of 16 elements with
+an E4M3 scale factor, MXFP4 blocks of 32 with a power-of-two E8M0 factor. Any
+gap measured between the two presets is therefore attributable to the block
+size, to the scale format, or to an interaction between them, with no way to
+tell which from the comparison itself.
+
+[1-P3]
+This work separates them. Block size and scale format are crossed in a 2x2
+factorial design, so either can be held fixed while the other varies; the two
+deployed formats sit at diagonal corners of the resulting grid, and the
+off-diagonal cells correspond to no hardware and no specification, existing
+only as measurement instruments. Accuracy is measured as the backward error
+of a quantized GEMM, using the machinery of classical rounding-error analysis
+adapted to formats whose grid is set by the block an element falls in rather
+than by the encoding alone -- an adaptation Section 3 develops. The design is
+swept over operand tail weight and contraction length, so the comparison rests
+on a grid of configurations rather than on a single measurement.
+
+[1-P4]
+The scale format, not the block size, is found to be the dominant factor.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> EL 36% ESTA ATRIBUIDO, NO AFIRMADO. refs.bib es explicito: "Cite only as
+>> NVIDIA's own reported result (vendor claim), never as independent fact", y
+>> citation_worklist.md (entrada 5) dice lo mismo. En la version anterior la
+>> atribucion ocupaba una frase entera; el 2026-08-26 se comprimio a una
+>> clausula al final de la misma frase del dato (58 -> 40 palabras). La
+>> sustancia se mantiene entera: de quien es la cifra ("its own ... model",
+>> "the vendor's own figure"), que aqui NO se da por establecida ("not
+>> independently established here"), y para que se usa (la observacion que
+>> motiva el trabajo). Esto ya no se puede comprimir mas sin convertir una
+>> cifra de fabricante en un hecho, que es justo lo que la politica prohibe.
+>>
+>> Numeros verificados verbatim en el Step 6.1 contra el HTML del propio
+>> paper (arxiv.org/html/2509.25149v1, Sec. 5 y pie de Fig. 6b): "MXFP4
+>> matches NVFP4 loss when trained on 36% more tokens (i.e., using 1.36T
+>> instead of 1T tokens)", modelo hibrido Mamba-Transformer de 8B.
+
+>> [1-P4] es deliberadamente de una sola frase, como pediste: el hallazgo al
+>> nivel del TITULO y nada mas. Sin nu*, sin magnitud del efecto, sin numeros.
+>> Ojo: tal como esta, la Introduccion NO anuncia la estructura del paper
+>> (no dice "Section 4 reports X, Section 5 does Y"). Es lo que pediste --
+>> una frase, no un roadmap -- y ademas la Seccion 5 esta explicitamente
+>> fuera de esta seccion. Lo digo por si al leerlo echas de menos el mapa:
+>> es una decision, no un olvido.
+
+>> LO QUE NO ESTA AQUI, A PROPOSITO: el pivot de nu* (solo en Results, 4c),
+>> la validacion con activaciones reales (Seccion 5), la diferenciacion
+>> frente a rasquinha2023metric / fasoli2026finer / egiazarian2026bridging y
+>> las limitaciones (las dos en la Seccion 6). Ninguna de las tres se asoma
+>> ni de refilon.
+
+>> TENSION DEL TITULO: RESUELTA 2026-08-26. El candidato anterior,
+>> "Isolating the Design Choice Behind NVFP4's Advantage over MXFP4", daba
+>> por supuesta la ventaja, justo lo que [1-P1] se niega a dar por
+>> establecido. Candidato nuevo, decidido por ti:
+>>
+>>   "Which Design Choice Explains NVFP4's Edge over MXFP4?
+>>    A Backward-Error Decomposition"
+>>
+>> Enmarca la PREGUNTA causal en vez de la respuesta presupuesta. Sigue
+>> siendo provisional. Actualizado en los dos sitios donde vivia el
+>> candidato viejo: el comentario TODO de paper/main.tex (donde \title{}
+>> sigue vacio a proposito) y SPEC.md, "Paper writing plan (Step 6.2)".
+
+>> "the machinery of classical rounding-error analysis adapted to..." en
+>> [1-P3] es el gancho hacia Method que pediste: gesticula, no explica. El
+>> desarrollo real esta en 3.2 (por que la cota clasica no transfiere) y 3.3
+>> (u_eff y la cota construida). Si te parece demasiado vago, la alternativa
+>> es nombrar u_eff aqui, pero cuesta ~15 palabras y adelanta Method.
+
+>> PRESUPUESTO: 282 de ~300, o sea ~18 sin gastar. Si la Introduccion tiene
+>> que crecer, ademas de esas 18, lo mas
+>> barato del paper esta en 06_related_work.txt, que quedo en 268 palabras
+>> contra un objetivo que con el ratio corregido (745 w/p) son ~300: hay ~30
+>> palabras sin reclamar alli. No las he movido; solo apunto donde estan.
+
+
+
+===============================================================================
+=== 2. BACKGROUND ===
+=== paper/drafts/02_background.txt
+===============================================================================
+
+===============================================================================
+BACKGROUND  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/02_background.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [2-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 2-P3", "en 2-P2 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las formulas van en notacion legible (sqrt, <=, n*u). Yo las devuelvo a
+    LaTeX. Si quieres cambiar una formula, escribela como te salga.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 222 palabras de texto (39 + 86 + 51 en los tres parrafos, mas
+    18 de leyenda y 28 de nota al pie de tabla) + una tabla de 9 filas.
+    Estimo ~0.5
+    paginas en el formato NeurIPS, que es lo que pediste. No compilado
+    todavia (el .tex sigue vacio a proposito).
+  - Todos los valores de la tabla salen de SPEC.md, no de memoria. Al final
+    del fichero esta el mapa fila -> linea de SPEC.md, por si quieres
+    verificarlo sin buscar.
+
+
+===============================================================================
+2. BACKGROUND
+===============================================================================
+
+
+[2-P1]
+Both deployed FP4 formats store the same elements -- E2M1: one sign bit, two
+exponent bits, one mantissa bit, largest finite magnitude 6 -- and differ only
+in how a block of those elements is scaled. Table 1 states that difference.
+
+
+        Table 1. The two block-scaled FP4 formats. Elements are identical;
+        the scaling is the whole of the difference.
+
+        |                          | MXFP4                 | NVFP4                        |
+        |--------------------------|-----------------------|------------------------------|
+        | element format           | E2M1 (1/2/1)          | E2M1 (1/2/1)                 |
+        | block size               | 32                    | 16                           |
+        | block scale format       | E8M0 (0/8/0),         | E4M3 (1/4/3)                 |
+        |                          | a power of two        |                              |
+        | global scale             | none                  | one per tensor (FP32)        |
+        | scale range              | 2^-127 .. 2^127       | 2^-9 .. 448 relative to the  |
+        |                          | (255 binades)         | global scale (~19 binades)   |
+        | scale resolution         | one binade            | 6.25% (3 mantissa bits)      |
+        |                          | (no mantissa bits)    |                              |
+        | clipping of the block max| impossible by         | up to ~6%                    |
+        |                          | construction          |                              |
+        | specification / vendor   | OCP MX v1.0           | NVIDIA                       |
+        |                          | {{cita: ocp2023mx}}   | {{cita: nvidia2026nvfp4}}    |
+
+        Blocks run along the contraction axis. The MXFP4 block-scale exponent
+        admits more than one rounding convention in the literature; the one
+        used here is stated in Section 3.
+
+>> La nota al pie de la tabla no es relleno. SPEC.md (lineas 324-363) registra
+>> TRES convenciones para redondear el exponente de la escala MXFP4: el
+>> floor de OCP/microxcaling, el round-up de este proyecto, y el
+>> round-to-nearest + 4/3 de tseng2025training / egiazarian2026bridging. La
+>> fila "clipping of the block max: impossible by construction" SOLO es cierta
+>> bajo la convencion de este proyecto (round-up); bajo el default de OCP el
+>> maximo del bloque SI se recorta. Sin esa nota, la tabla afirmaria de MXFP4
+>> algo que es una eleccion nuestra. Si quieres, se puede quitar la fila
+>> entera y llevarla a Method, pero entonces la tabla pierde el contraste mas
+>> directo con el ~6% de NVFP4.
+
+
+[2-P2]
+The field's existing tools for reasoning about the accuracy of such a product
+are the classical rounding-error bounds for an inner product. For length n and
+unit roundoff u, the deterministic worst case is gamma_n = n*u / (1 - n*u)
+{{cita: higham2002accuracy}}, obtained by compounding one rounding per
+accumulation step. Probabilistic analysis refines the typical case, replacing
+that leading factor to give a high-probability bound of order
+sqrt(n log n) * u {{cita: higham2019new}}. Both are stated in terms of a
+single unit roundoff u fixed by the encoding.
+
+>> DOS COSAS EN 2-P2:
+>>
+>> 1. Escribiste "gamma_n = nu/(1-nu)". Lo he leido como n*u/(1-n*u), que es
+>>    lo que dice SPEC.md (linea ~1012) y lo que ya esta escrito en el
+>>    borrador de Method [3.2-P1]. Lo he puesto con el asterisco explicito
+>>    (n*u) precisamente porque en este paper "nu" es el indice de cola de la
+>>    t-Student, y "nu/(1-nu)" se lee mal a primera vista.
+>>
+>> 2. sqrt(n log n) -> higham2019new: CONFIRMADO CORRECTO, la cita se queda
+>>    como esta. Resuelto 2026-08-25. Lo que dije antes aqui (que SPEC.md
+>>    atribuia la variante refinada a Connolly y que quiza habia que citar las
+>>    dos juntas) apuntaba a un ERROR DE SPEC.md, no a un error de este
+>>    parrafo. SPEC.md linea ~1001 decia:
+>>
+>>      "Higham & Mary (2019) and Connolly-Higham-Mary (2021) establish
+>>       sqrt(n)*u (respectively sqrt(n log n)*u for the refined variant)"
+>>
+>>    El "respectively" empareja cada paper con el resultado del OTRO. La
+>>    atribucion correcta, contra las citas de fuente primaria del Step 6.1:
+>>      - Higham & Mary (2019) = sqrt(n log n)*u, caso general.
+>>      - Connolly-Higham-Mary (2021) = sqrt(n)*u, sin log, incondicional,
+>>        especifica de stochastic rounding.
+>>    Ademas "refined variant" esta al reves: la cota mas fina (y posterior)
+>>    es la de Connolly. Anadir connolly2021stochastic aqui habria sido una
+>>    misatribucion de verdad, no una cita de mas.
+>>
+>>    SPEC.md ya esta corregido (con nota de correccion fechada), y
+>>    [3.2-P1] del borrador de Method esta reescrito para atribuir cada cota
+>>    a su paper por separado. Las dos secciones son ahora consistentes.
+
+
+[2-P3]
+The empirical fact that gives this context its urgency is a reported gap
+between the two formats: NVIDIA reports that MXFP4 matches NVFP4's pretraining
+loss only when trained on 36% more tokens {{cita: nvidia2026nvfp4}} -- the
+vendor's own result, on its own 8B model, reported without an account of where
+the difference comes from.
+
+>> El "36%" esta atribuido explicitamente a NVIDIA como resultado propio,
+>> nunca como hecho independiente. Es lo que exige refs.bib ("Cite only as
+>> NVIDIA's own reported result (vendor claim), never as independent fact") y
+>> citation_worklist.md entrada 5. Verificado verbatim en Step 6.1 contra el
+>> HTML del propio paper: "MXFP4 matches NVFP4 loss when trained on 36% more
+>> tokens (i.e., using 1.36T instead of 1T tokens)", Fig. 6b, modelo hibrido
+>> Mamba-Transformer de 8B.
+>>
+>> Es UNA frase, como pediste, porque la Introduccion desarrolla esto. Si al
+>> escribir la Introduccion se cuenta ahi entero, esta frase se puede reducir
+>> a media linea o desaparecer.
+
+
+===============================================================================
+LO QUE **NO** DICE ESTA SECCION, A PROPOSITO
+===============================================================================
+
+No dice en ningun sitio que las cotas clasicas no apliquen a formatos con
+escala por bloque bajo acumulacion exacta. Eso es 3.2 (Method), y ya esta
+escrito alli: [3.2-P2] da el argumento mecanistico (la n-dependencia viene
+del redondeo repetido en la acumulacion, que aqui no existe) y el de la u
+(no hay un u fijo que sustituir, porque la rejilla de un elemento la fija el
+amax de SU bloque).
+
+Background solo deja puestas las dos piezas que 3.2 necesita para morder:
+  - "one rounding per accumulation step"  ->  lo que 3.2-P2 retira.
+  - "a single unit roundoff u fixed by the encoding"  ->  lo que 3.2-P2
+    sustituye por u_eff.
+Ambas frases estan escritas de forma neutra, como descripcion de lo que la
+cota ES, no como preparacion de un ataque.
+
+
+===============================================================================
+DE DONDE SALE CADA FILA DE LA TABLA  (SPEC.md, para verificar sin buscar)
+===============================================================================
+
+  element format E2M1 1/2/1, max 6      SPEC.md l.19 (tabla de formatos),
+                                         l.130-135 ("E2M1 format")
+  block size 32 / 16                     SPEC.md l.197-198 (tabla de presets),
+                                         l.418
+  E8M0 0/8/0 potencia de dos             SPEC.md l.22, l.61-65, l.419
+  E4M3 1/4/3                             SPEC.md l.20, l.54-56, l.419
+  global scale: ninguna / una por tensor SPEC.md l.420; recipe l.429-433
+  global scale en FP32                   SPEC.md l.444 ("float64 here,
+                                         float32 in hardware")
+  rango 2^-127..2^127 (255 binades)      SPEC.md l.61-62, l.424
+  rango 2^-9..448, ~19 binades           SPEC.md l.424, l.481-490
+  resolucion: un binade / 6.25%          SPEC.md l.423
+  clipping: imposible / hasta ~6%        SPEC.md l.422, l.470-479
+  MXFP4 = OCP MX                         SPEC.md l.197; refs.bib ocp2023mx
+                                         (OCP MX Specification v1.0, 2023)
+  NVFP4 = NVIDIA                         SPEC.md l.198; refs.bib
+                                         nvidia2026nvfp4
+
+Un detalle que NO he metido en la tabla y que quiza quieras: SPEC.md l.425
+anota que bajo NVFP4 las filas de un tensor NO son independientes entre si
+(la escala global es por tensor), y bajo MXFP4 si. Es una diferencia real y
+medible entre los dos formatos, pero no la usa Method, asi que la he dejado
+fuera por espacio. Dilo y entra como decima fila.
+
+
+
+===============================================================================
+=== 3. METHOD ===
+=== paper/drafts/03_method.txt
+===============================================================================
+
+===============================================================================
+METHOD  --  borrador en texto plano para revision
+===============================================================================
+
+Fuente: paper/sections/03_method.tex (commit 294a675).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [3.1-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 3.4-P2", "en 3.4-P3 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las formulas van en notacion legible (sqrt, <=, sum_k). Yo las devuelvo a
+    LaTeX. Si quieres cambiar una formula, escribela como te salga.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 2.46 paginas. El plan (SPEC.md, Step 6.2) pedia ~1.5-2p.
+    Sobra aprox. media pagina. Al final del fichero estan los candidatos
+    concretos a recortar.
+  - Compila limpio (sin errores, sin citas sin resolver, sin cajas mal
+    ajustadas).
+
+>> DOS COSAS QUE ESCRIBI DISTINTO A LO QUE ME PEDISTE, Y POR QUE:
+>>
+>> 1. Los controles. Me pediste decir que block16/e4m3 y block32/e8m0 son
+>>    controles. Segun SPEC.md esos dos son los formatos REALES
+>>    (32+e8m0 = MXFP4, 16+e4m3 = NVFP4). Los controles son block16+e8m0 y
+>>    block32+e4m3. Lo escribi al reves de como me lo pediste, es decir,
+>>    correcto segun el repo. Ver 3.4-P2.
+>>
+>> 2. sqrt(n log n) -- RESUELTO 2026-08-25, [3.2-P1] REESCRITO. Version
+>>    anterior de esta nota: dije que cite higham2019new y connolly2021stochastic
+>>    juntas porque SPEC.md (linea 1000) atribuia la variante refinada a
+>>    Connolly. Esa linea de SPEC.md era un ERROR REAL y ya esta corregida.
+>>    La atribucion correcta, contra las citas de fuente primaria del Step 6.1:
+>>      - Higham & Mary (2019) = sqrt(n log n)*u. Caso general, cota de alta
+>>        probabilidad bajo un modelo de errores de redondeo mean-independent.
+>>      - Connolly-Higham-Mary (2021) = sqrt(n)*u. Sin factor log,
+>>        INCONDICIONAL, y especifica de STOCHASTIC ROUNDING.
+>>    O sea que la version vieja de [3.2-P1] estaba mal por partida doble: por
+>>    el orden de las citas (implicaba Higham->sqrt(n), Connolly->sqrt(n log n),
+>>    justo al reves) y por llamar "more refined" a sqrt(n log n), cuando la
+>>    cota mas fina y mas tardia es la de Connolly. Ahora cada cota lleva su
+>>    cita por separado y se dice explicitamente que cubren regimenes de
+>>    redondeo distintos, no que una refine a la otra.
+>>
+>>    OJO: paper/sections/03_method.tex linea 63 SIGUE con el texto viejo y
+>>    malo. No lo he tocado porque la regla es que el .tex no se mueve hasta
+>>    que revises el .txt. Dime y lo paso.
+>>
+>> 3. Nombre del bound. SPEC.md lo llama cota(n). En el paper lo puse como
+>>    beta(n), porque "cota" en un paper en ingles queda raro sin traducir.
+>>    Es el mismo objeto. Si prefieres otro simbolo, dilo.
+
+
+===============================================================================
+3. METHOD
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+3.1 Setup: Backward Error with Exact Accumulation
+-------------------------------------------------------------------------------
+
+[3.1-P1]  
+The measurement device is a quantized GEMM. For matrices A (M x n) and B (n x N), both are quantized using a block-scaled low-precision format along the contraction dimension n, and the resulting float64 RECONSTRUCTIONS -- the dequantized values, not the integer representations -- are multiplied. The accuracy is assessed elementwise using the backward error {{cita: rasquinha2023metric}}.
+
+        BE_ij = | (A B)_ij - Chat_ij | / ( |A| |B| )_ij        (eq. 1)
+
+Here, Chat denotes the quantized product, and |.| is applied elementwise. The denominator is calculated using the product of absolute values, not |AB|; the two differ when the exact product involves cancellation.
+
+[3.1-P2]  
+The main approach accumulates the reconstructions with complete accuracy in float64 -- this is a design decision rather than a matter of implementation simplicity. A low-precision GEMM encounters two distinct sources of error: operands snapped onto a coarse grid and partial sums rounded in a narrow accumulator, which combine, making it unclear which source affects the measurement. With exact accumulation, the only remaining approximation stems from the quantization of the inputs, leading to the residual Chat - AB representing the input-quantization error, as isolated by (eq. 1). A bfloat16 accumulator is a secondary option purposely excluded from the analysis of this grid and is never included in the primary results.
+
+[3.1-P3]  
+Operands have i.i.d. t-Student(nu) entries -- smaller nu meaning heavier tails, nu -> infinity the Gaussian case -- each tensor normalized to unit median absolute deviation, since the standard deviation is undefined for nu <= 2.
+
+>> 3.1-P3 was not included in your list of contents; I added it for context to clarify what nu means. It is the first candidate for removal if additional space is needed.
+
+-------------------------------------------------------------------------------
+3.2 Reasons the Classical Bound Does Not Apply
+-------------------------------------------------------------------------------
+
+[3.2-P1]  
+The classical worst-case backward-error bound for a length-n inner product is gamma_n = n*u / (1 - n*u) under unit roundoff u {{cita: higham2002accuracy}}. Two probabilistic results relax that leading factor, each a high-probability upper bound rather than a statement about typical growth. Higham and Mary replace gamma_n by a relaxed constant of order sqrt(n log n)*u, holding with a probability bounded below, for rounding errors modelled as mean-independent random variables {{cita: higham2019new}}; Connolly, Higham and Mary prove a sqrt(n)*u bound with no log factor, unconditionally, for stochastic rounding specifically {{cita: connolly2021stochastic}}. The two cover different rounding regimes rather than refining one another.
+
+[3.2-P2]  
+Neither of these bounds are applicable here due to a mechanistic reason. The n-dependence of both families stems specifically from REPEATED ROUNDING DURING ACCUMULATION: a single rounding occurs during every summation step, totaling n, either compounding in the worst case (gamma_n) or behaving as a random walk (sqrt(n)*u). With exact accumulation, that mechanism is absent from the process, so any n-dependence observed in the measured error cannot align with those bounds. Additionally, a block-scaled format does not provide a fixed u to replace: the classical unit roundoff is half an ulp based on a grid defined by the encoding, while here, the grid that an element occupies is determined by the largest magnitude in ITS OWN BLOCK, resulting in the achieved relative error being a distribution rather than an attribute of the format.
+
+-------------------------------------------------------------------------------
+3.3 A Measured Unit Roundoff, and the Constructed Bound
+-------------------------------------------------------------------------------
+
+[3.3-P1]  
+The quantity that substitutes for u is measured directly. For a specific element format, block size, scale format, and tail index nu, define
+
+        u_eff(format, block, nu) = median_i  ( |x_i - xhat_i| / |x_i| )
+                                                                   (eq. 2)
+
+This represents the median per-element relative quantization error: samples are drawn from that nu, quantized according to that configuration, and the median is extracted from the resulting distribution. Its 99th percentile is recorded simultaneously. The estimation uses a separate calibration draw, initiated from an independent stream, ensuring that the denominator in the ratio tested below is never derived from the sample it is evaluated against.
+
+[3.3-P2]  
+One choice inside (eq. 2) is load-bearing. Relative error is ill-defined as x_i -> 0, and "near zero" is meaningful only relative to an element's own effective scale s_eff (block scale times global scale, where one is used), since block scales span many orders of magnitude across a heavy-tailed tensor. Elements with |x_i| <= 0.25 * s_eff are therefore excluded. The threshold is not tuned: E2M1's smallest nonzero magnitude is 0.5 * s_eff, so under round-to-nearest any element at or below 0.25 * s_eff quantizes to exactly zero with relative error 1 -- the format's dynamic-range floor, not its precision. That the cut is necessary was checked, not assumed: with it disabled, all 32 measured configurations return p99 = 1.00000 exactly. Its price is a large, configuration-dependent exclusion -- surviving fractions range from 0.360 (MXFP4 at nu = 1) to 0.932 (NVFP4 at the Gaussian end) -- tabulated wherever u_eff is reported.
+
+[3.3-P3]  
+With exact accumulation, the error at the output entry (i,j) consists of a sum of n one-time input-quantization errors with essentially random signs, such that partial cancellation results in its growth resembling sqrt(n) instead of n, while the denominator in (eq. 1), sum_k |A_ik| |B_kj|, adds n strictly positive terms and grows approximately linearly for well-behaved inputs. Together, these result in BE ~ sqrt(n) * u_eff / n, leading to the tested bound
+
+        beta(n, format, block, nu) = c * u_eff(format, block, nu) / sqrt(n)
+                                                                     (eq. 3)
+
+which DECAYS in n rather than grows. This is an order-of-magnitude argument of the central-limit/law-of-large-numbers kind, not a proven tight inequality, and is not offered as a theoretical contribution: both premises require moments the heaviest tails swept here lack, and at nu = 1 (Cauchy) the derivation is expected to break down -- a limit of its assumptions, not a defect in the form of (eq. 3).
+
+[3.3-P4]  
+The constant c is predetermined at c = 1 for all supporting analyses, in accordance with the anti-circularity principle established in the preregistration of this study: a bound whose constant is tailored to the data it evaluates cannot be refuted by that same data. Adopting a unit leading constant is consistent with the tradition of probabilistic rounding analyses, which replace n*u with sqrt(n)*u in a deterministic factor without introducing a fitted constant {{cita: connolly2021stochastic}}. Given that the derivation is order-of-magnitude rather than tight, a poorly calibrated c = 1 serves as a reportable finding instead of justification for recalibration; any estimation of c-hat derived from data remains descriptive and exploratory, not reintegrated into the confirmatory ratio.
+
+[3.3-P5]  
+The bound is deemed broken at (format, nu, n) when the lower limit of the 95% bootstrap confidence interval of the median of BE / beta(n) exceeds 1.0: indicating when the error decreases at a rate that is significantly slower than anticipated by the cancellation rate, rather than simply exceeding a growing worst-case limit. Because u_eff is indexed by nu, both sides of this ratio adjust with nu, testing whether the SCALING LAW endures despite heavy tails, rather than evaluating whether heavy tails increase absolute error.
+
+
+---
+
+3.4  Factorial design
+
+>> NUMERACION ARREGLADA 2026-08-26. Antes las etiquetas de esta subseccion
+>> iban como 3.5-Px y las de "Robust statistical protocol" como 3.6-Px,
+>> desplazadas una posicion respecto a los titulos reales. Ya no: las
+>> etiquetas de todo el fichero coinciden con las subsecciones (3.1 Setup,
+>> 3.2 Classical bound, 3.3 u_eff, 3.4 Factorial design, 3.5 Statistical
+>> protocol). El contenido y el orden no se han tocado -- solo las
+>> etiquetas. Se arreglo aqui, y no al pasar a LaTeX como decia la nota
+>> anterior, porque los otros borradores ya se citan entre si por estos
+>> numeros.
+
+[3.4-P1]
+MXFP4 and NVFP4 differ in both block size and scale format at the same time, so any
+difference measured between the presets cannot be attributed to any one factor
+individually: block size, scale format, and their interaction are confounded in
+that comparison. The design crosses the two factors, block size in
+{16, 32} against scale format in {E8M0, E4M3}, so either can be held fixed
+while the other varies. This 2x2 setup is the main causal comparison. The element format is E2M1
+everywhere, since both real formats use E2M1. Fixing this makes scaling
+the only thing that changes. The use of a per-tensor global scale comes from
+the scale format rather than being varied. E8M0 covers 255 binades and can reach any
+block’s magnitude on its own, while E4M3 covers about 19 and overflows to NaN
+without one.
+
+[3.4-P2]
+Two of the four combinations are real formats. Block 32 with an E8M0 scale is
+MXFP4, and block 16 with an E4M3 scale is NVFP4. The other two, block 16 with
+E8M0 and block 32 with E4M3, are experimental controls. They do not correspond to
+any hardware, specification, or vendor format, and exist only as
+measurement tools to make the comparison between the two real formats
+clear. This text does not propose, endorse, or benchmark them as formats, and
+the results tables keep this distinction clear.
+
+>> Los ** ** son negrita en el .tex. Es la frase que pediste que quedara
+>> inequivoca. Ver nota 1 de la cabecera: esta al reves de como me lo pediste
+>> porque asi es como lo dice SPEC.md.
+
+[3.4-P3]
+Rounding mode (either round-to-nearest-even or stochastic) and a random Hadamard
+transform (on or off) are secondary factors and are not part of the main causal comparison. The
+transform is applied to each block along the contraction dimension with the same
+random signs on both operands. This way, it cancels out inside every inner product and
+does not need inversion.
+
+[MOVED TO LIMITATIONS -- see paper/drafts/pending notes]
+
+[3.4-P4]
+These four factors are combined with the tail index, which runs over
+nu in {1, 2, 3, 5, 8, 15, 30} together with the Gaussian limit, and with the
+contraction dimension n in {16, 64, 256, 1024, 4096}, creating a grid of
+8 x 5 x 2^4 = 640 cells, all using exact accumulation. The primary contraction
+dimension is n = 4096. It was not fixed in advance: it was declared post hoc in a
+dated preregistration amendment, filed before any confirmatory nu* analysis was
+run but after the sweep itself and its n-scaling slope fits were already
+complete, on the stated grounds that 4096 is closest to real GEMM shapes in
+language-model workloads and is the n at which the sqrt(n)-decay derivation's
+asymptotic assumptions are most likely to hold.
+The other four values are used as robustness checks, reported as a
+separate sensitivity table and never substituted for it. Trial counts are
+adaptive. There are 5000 trials per cell at nu in {1, 2, 3}, where quantile estimates are
+noisiest and the bound is most likely to break, and 1000 trials per cell for the
+lighter tails, making a total of 1.6 million trials.
+
+>> Opcion (c) aplicada. Aqui habia dos frases sobre los tres formatos
+>> per-tensor de referencia (FP8-E4M3, FP8-E5M2, INT8). Eliminadas de Method.
+>> Su destino esta anotado al final de este fichero, en "PENDIENTE PARA LA
+>> SECCION 6". No se pierde nada: la nota de abajo es la que hay que leer al
+>> escribir Limitaciones.
+
+---
+
+3.5  Robust statistical protocol
+
+[3.5-P1]
+Each trial provides a summary of its own M x N backward-error matrix, and
+the trial is the resampling unit throughout, never the individual matrix
+element. Elements within a block share a scale factor, are not
+exchangeable, and would give anticonservative intervals that inflate the
+measured break rate. Confidence intervals use the percentile bootstrap,
+with B = 10,000 resamples and an explicitly seeded generator, and are reported as
+computed rather than forced to be symmetric.
+
+[3.5-P2]
+The median and 90th percentile carry all confirmatory statistical weight. The
+99th percentile is reported for every cell but is only indicative, at any trial
+count used here. The reason is a measured coverage gap, not a general
+warning that percentile bootstraps can be unreliable. A cell’s p99 is determined by
+roughly its top 1% of values (10 out of 1000 trials, 50 out of 5000), and a percentile
+bootstrap resamples with replacement from the observed sample, so it can
+reweight those values but can never produce a value more extreme than the largest
+already drawn. A coverage simulation quantifies this: 1000 simulated
+experiments per cell, t-Student(nu = 2), both trial budgets, nominal 95%.
+Median coverage is 95.5% at 1000 trials and 94.8% at 5000, which is close to
+nominal at both. The p99 coverage is 92.7% and 94.0%, which is below the
+median’s at both budgets and about 3.5 standard errors below nominal at 1000
+trials. The gap is real
+and in the direction the mechanism predicts, but it is modest rather than a collapse.
+More trials measurably help p99 without closing the gap, which is why the
+indicative-only status remains at every trial count, not just below some
+threshold.
+===============================================================================
+RECORTES YA APLICADOS  (2026-08-25)
+===============================================================================
+
+Aqui habia un menu de cuatro candidatos a recortar, con sus longitudes de
+ANTES del recorte. Los cuatro se aplicaron el 2026-08-25, asi que el menu ya
+no describia el fichero. Sustituido por el registro de lo que se hizo:
+
+  1. [3.1-P3]   62 -> 32 palabras. Comprimido, no eliminado: nu tiene que
+                 quedar definido antes de que 3.3 lo use. Se quito el detalle
+                 de la forma (64,n) x (n,64), que sigue en [3.4-P4].
+
+  2. [3.4-P3]  101 -> 59 palabras. Las tres frases del "por que por bloque y
+                 no global" se trasladaron a la seccion 6. Texto integro en el
+                 bloque "SEGUNDO TRASLADO A LA SECCION 6" mas abajo, y ya
+                 escrito en 06_related_work.txt, punto (ii) de [6-P2].
+
+  3. [3.3-P2]  168 -> 142 palabras. Recorte moderado, NO a dos frases. La
+                 evidencia del p99 = 1.00000 sobrevive intacta.
+
+  4. [3.3-P3]  160 -> 135 palabras. Recortada solo la coleta de
+                 "order-of-magnitude" (83 -> 58). El caveat de que la
+                 derivacion falla en nu = 1 (Cauchy) sobrevive en sustancia.
+
+Total: 1918 -> 1795 palabras (-123), es decir de ~2.6p a ~2.40p.
+
+DONDE ESTA ESTO EN EL HISTORIAL: en ningun commit. paper/drafts/ NO esta bajo
+control de versiones (git status lo da como untracked), asi que estos cuatro
+recortes existen solo en el fichero. Los commits de esa misma sesion --
+475728a y 284c7c4 (correccion de la misatribucion Higham/Connolly en SPEC.md)
+y 1dd87fd (bajada de objetivos de pagina) -- sirven de marca temporal, pero
+NINGUNO contiene estos recortes.
+
+NOTA: este bloque es solo registro. No reabre ninguno de los cuatro recortes.
+
+
+===============================================================================
+PENDIENTE PARA LA SECCION 6  (Related work and limitations)
+===============================================================================
+
+LEER ESTO AL ESCRIBIR LA SECCION 6. Es la otra mitad de la opcion (c): lo que
+se quito de Method tiene que reaparecer aqui, o se pierde.
+
+QUE SE QUITO DE METHOD (parrafo [3.4-P4])
+  Dos frases que decian que los tres formatos per-tensor de referencia
+  -- FP8-E4M3, FP8-E5M2 e INT8 -- se barren sobre la misma rejilla de nu a
+  n in {16, 256, 4096} como baselines de contexto.
+
+POR QUE SE QUITO
+  Porque no se han ejecutado. Verificado directamente, no inferido:
+    - iter_reference_cells (scripts/run_sweep.py, linea 602) se invoca SOLO
+      dentro de dry_run() -- el modelo de coste. execute_sweep() usa
+      unicamente iter_main_cells (linea 472).
+    - results/sweep_e945b87a2395/cells/ contiene exactamente 640 ficheros,
+      que son las celdas del grid principal. No hay ningun parquet de celdas
+      de referencia en ningun sitio de results/.
+    - SPEC.md, "What is deliberately not in scope here": las 72 celdas de
+      referencia "are **not** executed by this harness yet" y necesitan su
+      propia ruta de ejecucion.
+  Mencionarlas en Method en presente afirmaba como hecho algo que no ha
+  ocurrido.
+
+QUE TIENE QUE DECIR LA SECCION 6
+  Que la comparacion contra formatos per-tensor no block-scaled (FP8-E4M3,
+  FP8-E5M2, INT8) esta especificada en la rejilla congelada
+  (configs/sweep_main.yaml, reference_configs: 3 formatos x 8 nu x 3 n =
+  72 celdas, 180.000 trials) pero NO se ha ejecutado, de modo que este
+  trabajo no situa MXFP4/NVFP4 frente a la linea base clasica. Es una
+  limitacion de alcance declarada, no un hueco silencioso.
+
+REGLA MIENTRAS TANTO
+  El paper NO puede citar ningun numero de estos tres formatos, en ninguna
+  seccion, hasta que las 72 celdas se ejecuten de verdad.
+
+SI EN ALGUN MOMENTO SE EJECUTAN
+  Entonces esta nota queda obsoleta: habria que devolver la mencion a Method
+  en presente y borrar la limitacion de la seccion 6.
+
+
+-------------------------------------------------------------------------------
+SEGUNDO TRASLADO A LA SECCION 6: el "por que por bloque y no global" del RHT
+-------------------------------------------------------------------------------
+
+QUE SE QUITO DE METHOD (parrafo [3.4-P3], recorte de 2026-08-25)
+  Las tres frases finales del parrafo, que justificaban aplicar la
+  transformada de Hadamard POR BLOQUE en vez de por fila entera. En su
+  sitio queda el marcador [MOVED TO LIMITATIONS]. Texto integro retirado,
+  palabra por palabra:
+
+    "It spreads a block's energy so a single outlier no longer sets the
+     block scale. This is done per block by design. A global, whole-row
+     transform spreads by sqrt(n), linking its effect to the same n whose
+     scaling law this study examines."
+
+POR QUE SE QUITO
+  Solo por espacio. No hay ningun problema de correccion con estas frases,
+  a diferencia del traslado anterior (los formatos de referencia, que se
+  quitaron porque afirmaban algo no ejecutado). Method sigue diciendo QUE
+  la transformada es un factor secundario y COMO se aplica; lo que se va es
+  el POR QUE de la eleccion por bloque.
+
+QUE TIENE QUE DECIR LA SECCION 6
+  Que la RHT se aplica por bloque y no de forma global de manera
+  deliberada: una transformada global de fila entera reparte la energia
+  sobre sqrt(n), lo que ataria su efecto al mismo n cuya ley de escala
+  este estudio esta midiendo -- es decir, confundiria el tratamiento con
+  la variable de interes. Encaja de forma natural en la lista de
+  limitaciones/decisiones de diseno junto a c = 1 y la correlacion
+  intra-bloque.
+
+  Fuente en el repo por si hace falta reconstruir el argumento con mas
+  detalle: SPEC.md, seccion "Random Hadamard Transform" ("What it buys").
+
+REGLA MIENTRAS TANTO
+  El marcador [MOVED TO LIMITATIONS] de [3.4-P3] NO se pasa al .tex. O se
+  ha escrito ya la seccion 6 con este contenido, o el marcador se borra sin
+  mas -- pero no puede acabar en el PDF.
+
+
+
+===============================================================================
+=== 4. RESULTS ===
+=== paper/drafts/04_results.txt
+===============================================================================
+
+===============================================================================
+RESULTS  --  borrador en texto plano para revision
+===============================================================================
+
+Fuente: ninguna todavia. paper/sections/04_results.tex esta vacio
+("NOT YET WRITTEN"). Este .txt es el primer borrador y la version editable.
+Cuando lo revises y lo modifiques, yo paso tus cambios al .tex; el .tex no se
+toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [4.1-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 4.2-P6", "en 4.3-P2 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las formulas van en notacion legible (sqrt, <=, |x|). Yo las devuelvo a
+    LaTeX.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ORDEN INTERNO
+  El orden de las subsecciones NO es cronologico. Es el que fijaste en
+  SPEC.md, "Paper writing plan (Step 6.2)": 4.1 mecanismo (Step 4.1),
+  4.2 descomposicion causal (Step 4.3, el resultado que lidera), 4.3 el nulo
+  de nu* (Step 4.2, subordinado, enmarcado como "por que pivotamos").
+  Ojo con la doble numeracion: la seccion 4.2 DEL PAPER es el Step 4.3 DEL
+  SPEC, y la 4.3 del paper es el Step 4.2 del SPEC. Todo lo de abajo usa la
+  numeracion del paper.
+
+ESTADO ACTUAL
+  - Longitud: ~1520 palabras de prosa (4.1: 379, 4.2: 701, 4.3: 438), unas
+    1.9 paginas de texto. Con las tres figuras encima, el encaje en 2-2.5
+    paginas depende de como se coloquen: ver la seccion "LONGITUD" al final.
+    Es una decision de maquetacion, no de redaccion.
+  - Ya no queda ninguna nota >> dentro del cuerpo: las dos que habia
+    (c_hat y el encuadre de 4.2) estan resueltas. Las notas numeradas del
+    final siguen abiertas.
+  - Escribi un primer borrador de ~1970 palabras y lo recorte antes de
+    ensenartelo. No falta ningun numero de los que pediste explicitamente;
+    lo que se fue esta listado en la nota editorial 7, con lo que cuesta
+    devolver cada cosa.
+  - Sin compilar: no he tocado main.tex ni 04_results.tex, como pediste.
+  - Todos los numeros salen de SPEC.md Steps 4.1/4.2/4.3 y de los
+    statements en results/analysis/{n_scaling_fits,nu_star,
+    causal_decomposition}/. No hay ninguno aproximado ni redondeado a ojo.
+
+
+===============================================================================
+4. RESULTS
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+4.1 The Scaling Mechanism, Confirmed Where Its Assumptions Hold
+-------------------------------------------------------------------------------
+
+[4.1-P1]
+The empirical log-log slope of median(BE) against n is fitted by ordinary least
+squares for each of the 128 sub-configurations of the sweep -- 8 tail indices
+x 2 block sizes x 2 scale formats x 2 rounding modes x 2 Hadamard settings --
+over that configuration's own 5 values of n, with a 95% interval from 2000
+bootstrap replicates resampling each n's trials independently. The reference is
+the exponent -0.5 of (eq. 3).
+
+[4.1-P2]
+No configuration's interval contains -0.5. All 128 lie entirely above it: the
+error decays with n, but more slowly than the cancellation regime predicts. None
+decays faster, and none has a positive slope, so error grows with n nowhere in
+the grid. That unanimity alone overstates the finding, however. It rests on a
+significance test, and at 1000-5000 trials per cell the intervals exclude -0.5
+even when the
+point estimate misses it by a few thousandths. Splitting by magnitude instead,
+at |slope-(-0.5)| > 0.02, separates the two readings: **63 of the 128
+configurations deviate materially from -0.5, and 65 do not.**
+
+[4.1-P3]
+The split is ordered by tail weight, and the deviation shrinks smoothly and
+monotonically as the tail lightens. At nu in {1, 2, 3} every one of the 16
+sub-configurations is material, with gaps from 0.041 to 0.490; the extreme is
+nu = 1, where the fitted slopes run from -0.010 to -0.139, one to two orders of
+magnitude shallower than predicted rather than borderline. At nu in {5, 8} the
+sub-configurations straddle the threshold, some above and some below, consistent
+with a smooth transition rather than a sharp cutoff. At nu in {15, 30, Gaussian}
+none is material at any configuration, the gap staying between 0.004 and 0.020.
+
+[4.1-P4]
+The pattern follows the derivation's own premises rather than cutting across
+them. Section 3.3 obtained the -0.5 exponent from a mean-zero numerator behaving
+like a random walk and a denominator obeying a law of large numbers, both
+resting on moments the heaviest tails here lack -- at nu = 1 the t-Student is
+Cauchy, with neither a finite mean nor a finite variance. The exponent is
+recovered to within two hundredths exactly where those moments exist, and
+departs from it exactly where they do not (Figure 2).
+
+
+-------------------------------------------------------------------------------
+4.2 Scale Format, Not Block Size, Is the Larger Lever
+-------------------------------------------------------------------------------
+
+[4.2-P1]
+The 2x2 design is read directly off the measured backward error, with no
+theoretical bound involved at any point: no beta(n), no c, no ratio to 1. This
+decomposition is exploratory and post-hoc, adopted under a dated preregistration
+amendment (sec 8.4) once the preregistered confirmatory comparison -- P1-P3 of
+sec 4, all framed in terms of nu* -- was left undefined by the finding of
+Section 4.3. For each combination of tail index, contraction dimension, rounding
+mode and Hadamard setting, three statistics are formed in log space,
+
+    effect_block  = median(log BE | block=16)   - median(log BE | block=32)
+    effect_scale  = median(log BE | scale=E4M3) - median(log BE | scale=E8M0)
+    interaction   = [ (16,E4M3) - (32,E4M3) ] - [ (16,E8M0) - (32,E8M0) ]
+
+each marginal effect pooling over the other factor, with a 95%
+percentile-bootstrap interval from 2000 replicates resampling all four
+underlying cells in one shared pass. Neither the tail index nor n is collapsed.
+
+[4.2-P2]
+**Scale format moves the measured error more than block size does at every one
+of the 40 canonical cells** (8 nu x 5 n, round-to-nearest, no Hadamard
+transform), and the ranking survives the secondary factors: scale format leads
+in 34 of 40 cells with the Hadamard transform on, 38 of 40 under stochastic
+rounding, and 35 of 40 with both, never reversing to an overall block-size
+majority in any of the four combinations. At n = 4096, canonically, effect_scale
+ranges from -0.162 at the Gaussian end to -0.389 at nu = 2, against -0.042 to
+-0.246 for effect_block: a pull two to four times larger across the grid
+(Figure 3). Both effects are negative at every n >= 64, so block = 16 and E4M3
+-- NVFP4's two choices -- each reduce measured error relative to their
+alternatives, and the larger of the two reductions is the scale format.
+
+[4.2-P3]
+The ranking is identical at all 5 values of n, at every nu, with no crossing
+anywhere in the grid, so the practical answer here -- unlike the threshold
+analysis of Section 4.3 -- does not depend on which n had been designated
+primary. The n = 16 column is the apparent exception, and it is not measuring
+block size at all: zero-padding leaves max|x| unchanged, so a nominal block size
+of 32 spans the same 16 elements, with the same scale, as block size 16 does.
+The effect first becomes measurable at n = 64, where the two arms are genuinely
+different quantizers, and is essentially flat through n = 4096 (at nu = 1:
+-0.286, -0.270, -0.257, -0.246).
+
+[4.2-P4]
+The margin between the two factors is not uniform, and it is thinnest at the
+heaviest tail. Written as |effect_scale| - |effect_block|, it is 0.016 to 0.043
+at nu = 1 for n >= 64, against 0.124 to 0.135 at nu = 15 -- a four- to eightfold
+narrowing -- and the narrowing is confined to nu = 1, since at nu = 2 the margin
+is 0.16 to 0.19, the widest of the three tail indices examined. **The margin narrows
+sharply at nu = 1 but does not cross.** Point estimates never flip at any of the
+40 canonical cells, and at n = 4096 the intervals do not overlap:
+|effect_block| in [0.2395, 0.2510] against |effect_scale| in [0.2719, 0.2831].
+
+[4.2-P5]
+This agrees only partly with the per-element picture. Measured on u_eff -- the
+same two factors applied to the elementwise quantization error of (eq. 2) rather
+than to end-to-end error -- the block-size effect exceeds the scale-format
+effect at nu = 1 (1.155 against 1.113), and the two cross by nu = 2 (1.144
+against 1.120). In backward error the direction replicates but the crossing does
+not occur: at nu = 1 the block-size ratio is 1.298 to 1.329 across n >= 64
+against 1.465 to 1.524 for the scale format, a lead reduced but never erased.
+
+[4.2-P6]
+The two factors are not purely additive: the interaction term is significant at
+essentially every cell with n >= 64, from -0.095 at nu = 1 to -0.028 at the
+Gaussian end at n = 4096. It is not folded into the dominance comparison above,
+which uses the pooled marginal effects.
+
+
+-------------------------------------------------------------------------------
+4.3 Why the Analysis Is Framed by Magnitude and Not by a Threshold
+-------------------------------------------------------------------------------
+
+[4.3-P1]
+The decomposition of Section 4.2 is not the analysis this study set out to run.
+The preregistered plan was to locate nu*, the tail index at which beta(n) first
+fails by the criterion of Section 3.3, for each of the 16 families, and to
+compare the two block sizes by where their nu* falls.
+
+[4.3-P2]
+**The bound is broken at every one of the 8 tested tail indices, in every one of
+the 16 families, at n_primary = 4096**, and 0 of the 16 is non-monotone, so nu*
+is not merely hard to locate but undefined everywhere on this grid. For the two
+named presets, canonically, the median ratio at nu = 1 is 31.92 [31.85, 31.97]
+for MXFP4 and 20.91 [20.85, 20.97] for NVFP4, against 1.588 [1.585, 1.590] and
+1.515 [1.513, 1.517] at the Gaussian limit. Even in the near-Gaussian regime,
+which the derivation's assumptions fit best, the interval sits entirely above
+1: c = 1
+under-predicts the measured error by roughly 50 to 60% there, and by a factor of
+20 to 32 at nu = 1 (Figure 1).
+
+[4.3-P3]
+This is not an artifact of the primary contraction dimension: the same pattern
+holds at all 5 values of n, 16 of 16 families censored above and 0 below at
+each. For MXFP4 at nu = 1 the ratio is already 3.55 at n = 16 and rises through
+7.18, 12.10 and 19.62 to 31.92 at n = 4096, growing in line with the
+shallower-than-(-0.5) exponent of Section 4.1 rather than closing.
+
+[4.3-P4]
+The preregistration names this outcome in advance: its contingency for all cells
+being censored above states that the tail range was mis-specified, the
+hypothesis untestable on such a grid, and the result to be reported as a grid
+mis-specification rather than a confirmation. It is equally not a null -- the
+rank comparison returns equal fragility for the two block sizes only because
+every rank is pinned at the ceiling, the signature of a saturated measurement.
+The two confirmatory results therefore separate cleanly: the functional form of
+(eq. 3) is well supported at nu >= 15 (Section 4.1), while its leading constant,
+fixed at c = 1 by the anti-circularity constraint of Section 3.3, is not
+calibrated anywhere in the tested range.
+
+[4.3-P5]
+With no nu* to locate, block size and scale format could not be compared through
+the bound at all -- both sides are censored past the edge of what was measured.
+This is why Section 4.2 addresses the same practical question directly from
+measured magnitudes, rather than through the threshold criterion above.
+
+
+===============================================================================
+NOTAS EDITORIALES  --  cosas que tienes que decidir tu
+===============================================================================
+
+>> 1. NUMERACION DE LAS FIGURAS. Me pediste Figura 2 en 4.1, Figura 3 en 4.2
+>>    y Figura 1 en 4.3, y asi las he referenciado. Pero eso hace que la
+>>    Figura 1 se cite LA ULTIMA de las tres en el cuerpo del texto. Los
+>>    ficheros ya existen con esos nombres (paper/figures/figure1_nu_star,
+>>    figure2_n_scaling, figure3_causal_heatmap) y con esos contenidos, y
+>>    make_figures.py llama a figure1_nu_star "the paper's central figure",
+>>    que es de antes de la decision de liderar con el Step 4.3. Opciones:
+>>    (a) dejar los numeros como estan y forzar la colocacion de floats;
+>>    (b) renumerar para que sigan el orden de aparicion (nu_star pasaria a
+>>    ser la Figura 3); (c) dejarlo y que lo resuelva la maquetacion final.
+>>    NO he tocado nada. Es la unica nota que bloquea el paso a .tex.
+
+>> 2. EL UMBRAL DE 0.02 EN 4.1-P2. El corte |slope-(-0.5)| > 0.02 que separa
+>>    63 de 65 no esta preregistrado: SPEC.md dice que viene de
+>>    SLOPE_MATCH_TOL, la tolerancia que ya usaba scripts/probe_n_scaling.py
+>>    para esta misma distincion. Es decir, es anterior a estos datos y no se
+>>    eligio mirandolos, pero no esta en PREREGISTRATION. Tal como esta
+>>    escrito, el parrafo lo usa sin decir de donde sale. Creo que hace falta
+>>    media frase ("the same tolerance the pilot probe used") o una nota al
+>>    pie. No la he anadido porque no se si quieres gastar ahi las palabras.
+
+>> 3. LOS NUMEROS DE u_eff EN 4.2-P5 (1.155 / 1.113 / 1.144 / 1.120). Vienen
+>>    del analisis de u_eff del SPEC ("u_eff measurement", Result 3), que no
+>>    es ninguna de las tres subsecciones de Results ni esta descrito en
+>>    Method mas alla de la definicion de u_eff en 3.3. He metido una
+>>    clausula de contexto ("the same two factors applied to the elementwise
+>>    quantization error of (eq. 2)") para que el lector sepa que son otra
+>>    medicion, pero sigue siendo el parrafo mas denso de la seccion y cita
+>>    numeros de un analisis que el paper no presenta. Alternativas si no te
+>>    convence: moverlo a un apendice, o quitarlo y dejar solo 4.2-P4.
+
+>> 4. LO QUE NO HE PUESTO, A PROPOSITO. Me dijiste que no adelantara
+>>    Discussion ni Limitaciones. Por eso NO aparece: que extender la rejilla
+>>    hacia nu > 30 seria el siguiente paso natural para encontrar donde (si
+>>    en algun sitio) aguanta el bound; que la hipotesis del corte near-zero
+>>    explicaria parte del patron de 4.2-P5 pero esta sin confirmar del lado
+>>    del scale format; y que la ausencia de crossover en BE frente al
+>>    crossover en u_eff no esta mecanisticamente explicada. Las tres son
+>>    material de la seccion 6 y estan en SPEC.md (Step 4.2 "What this does
+>>    and does not mean", Step 4.3 "Reconciliation", punto 2). Apuntadas aqui
+>>    para que no se pierdan.
+
+>> 5. TABLA OPCIONAL EN 4.1. SPEC.md tiene la tabla de gap min/max por nu
+>>    (8 filas, 3 columnas). En 4.1-P3 la he dado en prosa por rangos, que
+>>    ocupa mucho menos. Si prefieres la tabla, la monto: son ~0.4 pulgadas
+>>    de alto y hace el patron monotono mucho mas visible de un vistazo.
+
+>> 6. NOMBRE DEL BOUND. Uso beta(n), igual que en el borrador de Method, no
+>>    "cota(n)" como lo llama SPEC.md. Mismo objeto. Si cambias el simbolo,
+>>    hay que cambiarlo en los dos ficheros.
+
+>> 7. LO QUE CAYO EN EL RECORTE DE 1970 A ~1350 PALABRAS. Nada de esto es
+>>    incorrecto ni discutible: son numeros y frases del SPEC que sacrifique
+>>    por espacio. Cualquiera vuelve en una linea si lo pides.
+>>      (a) 4.3-P2: la columna nu=30 de la tabla del SPEC -- MXFP4
+>>          1.615 [1.613, 1.618], NVFP4 1.531 [1.528, 1.533]. La quite
+>>          porque es casi identica a la del limite gaussiano (1.588 /
+>>          1.515) y el contraste que pediste (1.5x vs 32x) se ve igual sin
+>>          ella. Cuesta ~25 palabras devolverla.
+>>      (b) 4.2-P2: la frase que explicaba como leer la Figura 3 ("los dos
+>>          paneles de scale format se ven distintos entre si, las dos filas
+>>          de block size dentro de cada panel no"). Eso es material de pie
+>>          de figura, no de cuerpo. Cuando escribamos los captions tiene
+>>          que estar ahi, o la figura pierde su lectura de 5 segundos.
+>>      (c) 4.2-P3: que effect_block a n=16 es significativo en 1 de 8 nu
+>>          (nu=8, +0.0251), la tasa que da el azar en 8 tests al 95%. Era
+>>          el cierre del argumento de que ese cero es ruido de muestreo.
+>>      (d) 4.2-P6: que simetricamente el efecto del scale format es mayor a
+>>          block=32 que a block=16 (la misma afirmacion leida al reves).
+>>      (e) 4.3-P4: el detalle mecanico P1a=P1b=P2a=P2b=0 y que el patron
+>>          degenerado se repite en los 4 combos de round_mode x rht.
+>>          Resumido como "every rank is pinned at the ceiling".
+
+
+===============================================================================
+LONGITUD
+===============================================================================
+
+Prosa: ~1520 palabras (sin cabecera, sin notas >>). La calibracion sale del
+borrador de Method, contado igual: 1950 palabras de prosa = 2.46 paginas
+compiladas, o sea ~790 palabras por pagina en esta plantilla. 1520 / 790 =
+~1.9 paginas de texto.
+
+El resto lo deciden las figuras, no el texto. A tamano nativo:
+  figure1_nu_star         3.3 x 2.75 in
+  figure2_n_scaling       3.3 x 2.95 in
+  figure3_causal_heatmap  6.8 x 3.0 in  (mas ancha que la caja de texto de
+                          5.5 in; al escalarla queda en ~2.4 in de alto)
+
+Apiladas por separado son ~8.1 in de alto, casi una pagina entera: la seccion
+se iria a ~2.9 paginas, por encima de tu objetivo. Las figuras 1 y 2 miden
+3.3 in de ancho justamente porque caben lado a lado en una fila de dos:
+montadas asi, las tres ocupan ~0.6 paginas y la seccion cae a ~2.45, dentro
+del objetivo pero en el limite alto. No lo he decidido yo porque implica
+tocar el .tex.
+
+Resumiendo: el texto ya esta dentro; lo que decide si esto son 2.5 o 2.9
+paginas es la maquetacion de las figuras, no la redaccion.
+
+Si aun asi hay que recortar mas, por orden de "lo que menos duele":
+  1. [4.2-P6]   ~50 palabras. La interaccion. No la pediste; es un hallazgo
+                 real y medido, pero es el unico parrafo de 4.2 que no
+                 sostiene la tesis de la subseccion.
+  2. [4.3-P5]   ~45 palabras. El cierre que devuelve a 4.2. Se pierde el
+                 remate del orden no cronologico que pediste.
+  3. [4.2-P3]   la explicacion del zero-padding en n=16 son ~70 palabras.
+                 Se puede comprimir a una frase, pero entonces el lector se
+                 queda sin saber por que la columna n=16 se ve plana, que es
+                 exactamente el tipo de hueco que un revisor senala.
+  4. [4.2-P5]   ~90 palabras, la reconciliacion con u_eff. Es el recorte que
+                 mas duele de los cuatro y por eso va el ultimo: lo pediste
+                 explicitamente y es lo que impide que 4.2-P2 se lea como un
+                 "consistently" mas fuerte de lo que aguantan los datos.
+
+
+
+===============================================================================
+=== 5. VALIDATION WITH REAL ACTIVATIONS ===
+=== paper/drafts/05_validation.txt
+===============================================================================
+
+===============================================================================
+VALIDATION WITH REAL ACTIVATIONS  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/05_validation.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [5-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 5-P5", "en 5-P3 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 662 palabras (P1 132, P2 134, P3 123, P4 219, P5 54), contra
+    un objetivo de ~500-665 (0.75-1p x 667 palabras/pagina). Entra, cerca
+    del techo: ~0.99 paginas. [5-P4] crecio de 163 a 219 al anadir el
+    argumento de cobertura de la rejilla (ver NOTAS).
+  - Todos los numeros salen de SPEC.md "Step 4.4", incluido el addendum del
+    diagnostico de h6. Al final esta el mapa numero -> linea de SPEC.md.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+5. VALIDATION WITH REAL ACTIVATIONS
+===============================================================================
+
+
+[5-P1]
+The t-Student model underlying every result above was checked against the
+activations a real network produces. GPT-2 small was run over 300 non-empty
+lines of the WikiText-2 raw test split, giving 34,390 valid tokens, and
+activations were captured at three of its twelve transformer blocks -- h0, h6
+and h11, the first, middle and last -- all at the attention input projection
+(attn.c_attn), so that depth is the only thing varying across the three; the
+hook point is held fixed rather than mixed across layers. Padded positions are
+removed before any statistic or GEMM operand sees them, by construction rather
+than by a later filter. Tail weight is summarized by excess kurtosis in
+Fisher's convention, in which a Gaussian is 0 and not 3, computed over the full
+flattened tensor as a single distribution.
+
+[5-P2]
+Each layer's excess kurtosis k is mapped to an equivalent tail index through
+nu = 4 + 6/k, the closed-form inverse of a t-Student's k = 6/(nu - 4), which is
+defined only for nu > 4. The out-of-domain case is k <= 0, which no t-Student
+attains and which the code reports as N/A with a stated reason rather than
+extrapolating; it did not arise at any layer, though h6's nu = 4.06 sits within
+0.06 of the boundary. The quantized-GEMM pipeline of Section 3.1 is then run
+twice per layer and preset: once on the real activations, once on a synthetic
+t-Student(nu) draw of identical shape, rescaled so its median absolute
+deviation matches the real tensor's. The layer's own weight matrix serves as
+operand B in both arms, so the two runs differ only in operand A's tail shape.
+
+[5-P3]
+Four of the six layer-preset cells land within 10% of the t-Student
+prediction, and none falls outside 50%. At h0 (excess kurtosis 1.02,
+nu = 9.88) and h11 (7.03, nu = 4.85) the observed median(BE) matches the
+predicted value to within 2-4% under both presets: observed/predicted ratios
+of 0.997 and 0.987 at h0, 1.041 and 0.994 at h11. Layer h6 misses. Its excess
+kurtosis is 101.9, two orders of magnitude beyond the other two layers, its
+equivalent nu is 4.06, and its observed error runs 38% (MXFP4) and 23% (NVFP4)
+HIGHER than predicted. The direction is the informative part: the real
+activations produce MORE backward error than a MAD- and kurtosis-matched
+synthetic draw, so a single matched scalar under-describes how concentrated
+h6's outlier mass is.
+
+[5-P4]
+A targeted diagnostic on h6's own tensor, with no GEMM rerun, locates that
+concentration. The twenty largest activation magnitudes in the entire
+34,390 x 768 tensor fall in exactly one channel, index 64, across twenty
+distinct tokens. Within the top-1% pool the same channel accounts for 13.0% of
+the mass and appears for all 34,390 tokens, the five most frequent channels for
+58.2%, and the top ten for 75.3%; per-channel maxima drop sharply after a
+handful (8.06, 7.08, 6.55, 5.31, then 2.76 for the next channel down). This is
+the massive-activations pattern documented in transformer hidden states
+{{cita: sun2024massive}}, and it violates an assumption the synthetic model
+makes implicitly: that large values are randomly located and redrawn every
+sample, where h6's are anchored to the same few channels on essentially every
+token. The measured value also falls in a gap this study's own nu-grid never
+samples: nu in {1, 2, 3} have undefined population excess kurtosis, outside the
+closed form's nu > 4 domain, while nu >= 5 tops out at 6 for the heaviest
+finite-kurtosis grid point -- so 101.9 is finite but far past any value the
+grid covers. Whether that structure
+mechanistically drives the 23-38% gap, rather
+than merely correlating with it, is not established here -- no ablation
+separating channel structure from the kurtosis match was run, and none is
+claimed.
+
+[5-P5]
+This check is exploratory and bears on none of the confirmatory comparisons.
+It tests the modeling choice underlying the study rather than any hypothesis
+about the formats, and finds that choice sound across most of a real network
+while naming the condition -- extreme, channel-concentrated kurtosis -- under
+which a single kurtosis-matched nu stops being sufficient.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> rasquinha2023metric NO se cita aqui, y creo que es lo correcto. Me pediste
+>> comprobar si el matiz per-vector/per-tensor de refs.bib hace falta en esta
+>> seccion "si esta seccion habla de la metodologia de la reproduccion del
+>> Step 2.2". No habla: el Step 4.4 es la comprobacion con activaciones
+>> reales de GPT-2, y no tiene nada que ver con la reproduccion de
+>> arXiv:2408.02897. Asi que, siguiendo tu propia instruccion, queda fuera
+>> del todo. El matiz sigue sin aparecer en ningun sitio del paper; si algun
+>> dia se menciona la reproduccion del Step 2.2, tiene que ir con ella.
+
+>> [5-P5] NO estaba en tu lista de contenidos, lo he anadido yo. Razon:
+>> SPEC.md marca el Step 4.4 como EXPLORATORY en el propio titulo y
+>> PREREGISTRATION.md sec 5.1 lista "real activations" explicitamente bajo
+>> "exploratory ... never as evidence for or against H1". Publicar esta
+>> seccion sin decirlo la dejaria leerse como un cuarto resultado
+>> confirmatorio, que es justo lo que la preregistracion prohibe. Son 54
+>> palabras y es el primer candidato a recortar si hace falta espacio, pero
+>> recortarlo entero tiene un coste de honestidad, no solo de contenido.
+>> Alternativa mas barata: reducirlo a una sola frase dentro de [5-P4].
+
+>> ARGUMENTO DE COBERTURA DE LA REJILLA: ANADIDO 2026-08-26, en [5-P4],
+>> justo despues del mecanismo de massive activations y antes del caveat de
+>> "no probado". Es el argumento que en la version anterior estaba solo
+>> anotado aqui como pendiente. Costo 56 palabras, no las ~45 que estime;
+>> la seccion pasa de 606 a 662, que sigue dentro del objetivo de 500-665.
+>> Fuente: SPEC.md l.3452-3460.
+>>
+>> Ojo al orden de las tres piezas en [5-P4], que es deliberado:
+>> mecanismo (canales fijos) -> por que la rejilla no cubre este regimen ->
+>> lo que NO esta demostrado. Si se recorta el parrafo, el caveat final es
+>> lo ultimo que debe caer.
+
+>> REFERENCIA CRUZADA AFINADA 2026-08-26: [5-P2] decia "the quantized-GEMM
+>> pipeline of Section 3" (Method entera) y ahora dice "Section 3.1", que es
+>> donde se define el pipeline. Se puede afinar asi porque la numeracion de
+>> subsecciones de Method ya esta arreglada y estable en 03_method.txt
+>> (3.1 Setup, 3.2 Classical bound, 3.3 u_eff, 3.4 Factorial design,
+>> 3.5 Statistical protocol). Es la unica referencia cruzada a Method que
+>> hace esta seccion.
+
+>> Los seis "verdicts" de SPEC.md (CLOSE / MODERATE GAP / LARGE GAP) no
+>> aparecen en el texto: son etiquetas internas de la tabla del repo, con sus
+>> umbrales propios (10% / 50%), y he preferido dar los numeros y dejar que
+>> el lector juzgue. Los umbrales si estan, en la primera frase de [5-P3].
+
+
+===============================================================================
+DE DONDE SALE CADA NUMERO  (SPEC.md, "Step 4.4", para verificar sin buscar)
+===============================================================================
+
+  GPT-2 small, WikiText-2 raw test, 300 lineas   SPEC.md l.3354-3357
+  34.390 tokens validos                          SPEC.md l.3363
+  h0 / h6 / h11, attn.c_attn, pre-hook           SPEC.md l.3367-3372
+  padding excluido por construccion              SPEC.md l.3378-3384
+  curtosis de exceso, Fisher, gaussiana = 0      SPEC.md l.3386-3393
+  nu = 4 + 6/k, dominio nu > 4, caso k <= 0      SPEC.md l.3395-3407
+  h6 a 0.06 del borde                            SPEC.md l.3410-3411
+  brazo predicho: t-Student, MAD-matched, misma B SPEC.md l.3413-3421
+  tabla de 6 celdas (todos los ratios)           SPEC.md l.3430-3437
+  4 de 6 dentro del 10%, ninguna fuera del 50%   SPEC.md l.3444
+  h0 y h11 "2-4% off"                            SPEC.md l.3445-3446
+  h6: 1.383 MXFP4 / 1.234 NVFP4, observado MAYOR SPEC.md l.3500-3504
+  top-20 en el canal 64, 20 tokens distintos     SPEC.md l.3509-3513
+  13.0% / los 34.390 tokens / 58.2% / 75.3%      SPEC.md l.3513-3519
+  maximos por canal 8.06 / 7.08 / 6.55 / 5.31    SPEC.md l.3519-3521
+  siguiente canal (640) a 2.76                   SPEC.md l.3521
+  CONCENTRATED, consistente-no-prueba            SPEC.md l.3528-3535
+  sin ablacion que aisle la estructura de canal  SPEC.md l.3550-3556
+  23-38%, exploratorio, no toca H1 ni nu*        SPEC.md l.3478-3487
+
+Nota sobre sun2024massive: refs.bib registra que Zhuang Liu es el CUARTO
+coautor de ese mismo paper, no un trabajo aparte. Una version anterior de
+SPEC.md citaba "Liu et al." como si fuera una segunda fuente independiente y
+se corrigio en el Step 6.1. Aqui hay una sola cita, que es lo correcto.
+
+
+
+===============================================================================
+=== 6. RELATED WORK AND LIMITATIONS ===
+=== paper/drafts/06_related_work.txt
+===============================================================================
+
+===============================================================================
+RELATED WORK AND LIMITATIONS  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/06_related_work.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [6-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 6-P2", "en 6-P1 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - {{cita: clave}} marca donde va una cita. Las claves son las de
+    paper/refs.bib.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 268 palabras (6-P1: 87, 6-P2: 181), contra un objetivo de
+    ~265 (0.4p x 667 palabras/pagina). El margen de 19 palabras que sobraba
+    en la primera version ya esta gastado en ampliar el punto (v).
+  - Los dos traslados desde Method estan cubiertos, ambos en [6-P2]:
+    puntos (i) formatos de referencia no ejecutados y (ii) RHT por bloque.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+6. RELATED WORK AND LIMITATIONS
+===============================================================================
+
+
+[6-P1]
+This work builds directly on the backward-error methodology of
+{{cita: rasquinha2023metric}}, extending it to block-scaled formats and
+heavy-tailed operands, neither of which that study covered. Two recent works
+approach FP4 microscaling from other directions. {{cita: fasoli2026finer}} also
+measures block-size effects on model accuracy, but attributes degradation to
+NARROW tensor distributions -- the opposite regime from the heavy tails swept
+here. {{cita: egiazarian2026bridging}} analyses MXFP4 and NVFP4 error under a
+Laplace operand model scored by per-element MSE, differing from this work in
+both the metric (backward error) and the distributional assumption (a
+t-Student tail sweep).
+
+
+[6-P2]
+Six scope limits qualify these results. (i) The three per-tensor reference
+formats -- FP8-E4M3, FP8-E5M2 and INT8 -- are specified in the frozen grid but
+never executed, so MXFP4 and NVFP4 are not positioned against a
+classical per-tensor baseline. (ii) The random Hadamard transform is applied
+per block by design: a global, whole-row transform spreads energy over sqrt(n)
+and would tie its effect to the same n whose scaling law is under study, so
+global RHT, used in some deployments, is not evaluated here. (iii) Quantization is
+CPU emulation in float64, not real quantized hardware. (iv) Only E2M1 elements
+are studied; no other element grid is swept. (v) Elements sharing a block share
+a scale, so their errors are correlated rather than independent -- the leading
+candidate behind the u_eff residual, consistent with a survival-fraction gap
+whose rank order against the u_eff block-size excess is perfect across all
+eight nu (Spearman 1.0), but not isolated by a dedicated ablation.
+(vi) The constant
+c = 1 is fixed a priori for anti-circularity, so what is characterized is the
+bound's functional FORM, not a calibrated absolute value.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> OJO CON EL PUNTO (v): CAMBIE UNA COSA DE LO QUE ME PEDISTE, Y ES
+>> IMPORTANTE. Me dijiste que escribiera que la survival-fraction gap sigue
+>> "the u_eff residual across the full nu grid (Spearman 1.0)". Eso mezcla
+>> DOS cantidades distintas, y SPEC.md avisa explicitamente de esa mezcla:
+>>
+>>   - Spearman 1.000 es entre la survival gap y el **u_eff block-size
+>>     EXCESS**, y ese si va sobre las ocho nu (SPEC.md l.1911-1914:
+>>     "its rank order against the u_eff block-size excess is perfect across
+>>     all eight nu (Spearman 1.000; Pearson 0.957, or 0.987 on logs)").
+>>   - El **residual** (el "unexplained shortfall") solo esta definido en
+>>     nu = 1 y nu = 30, DOS puntos. SPEC.md l.1917-1925 lo dice tal cual:
+>>     "no correlation across the grid can be computed for it and none is
+>>     claimed here: two points are always perfectly correlated", y remata
+>>     que coincidir en direccion con dos puntos "is weak evidence and is
+>>     reported as such".
+>>
+>> O sea que escribir "tracks the u_eff residual across the full nu grid
+>> (Spearman 1.0)" habria pegado el 1.0 a la cantidad equivocada y habria
+>> reclamado apoyo en toda la rejilla para algo medido en dos puntos.
+>> Exactamente el tipo de error que acabamos de corregir en SPEC.md.
+>>
+>> Lo que he escrito en (v) mantiene las dos separadas: la correlacion
+>> intra-bloque es "the leading candidate behind the u_eff residual"
+>> (que es como lo llama SPEC.md l.1685: "Leading candidate mechanism,
+>> confirmed directionally but not quantitatively"), y el Spearman 1.0 va
+>> atado al block-size excess sobre las ocho nu, que es su sitio.
+>>
+>> Si querias de verdad afirmar lo del residual sobre toda la rejilla,
+>> dimelo, pero entonces hay que cambiar SPEC.md primero, y SPEC.md dice
+>> hoy que ese numero no existe.
+
+>> PRESUPUESTO: 268 palabras contra el objetivo de ~265, con el punto (v)
+>> ya ampliado. Antes de ampliarlo eran 246. Para no pasarme, recorte 8
+>> palabras de fraseo en (i), (ii) y (vi) -- solo redaccion, ningun
+>> contenido: "were never executed" -> "never executed", "as used in some
+>> deployments" -> "used in some deployments", y "what is characterized here
+>> is the functional FORM of the bound" -> "what is characterized is the
+>> bound's functional FORM".
+>> No he cortado nada de lo que pediste: los tres trabajos estan
+>> diferenciados en [6-P1] con una clausula cada uno, y las seis
+>> limitaciones estan todas en [6-P2]. Asi que la respuesta a tu pregunta es
+>> que 0.4p SI da para este contenido.
+>>
+>> EN QUE SE GASTO EL MARGEN: en el punto (v), que era el mas expuesto de
+>> los seis. Antes decia "evidenced but not isolated", que afirmaba que
+>> habia evidencia sin decir cual; ahora nombra el mecanismo (escala
+>> compartida -> errores correlacionados) y la evidencia concreta.
+>>
+>> LO QUE SIGUE SIN CABER: la nota per-vector de rasquinha2023metric,
+>> ~20 palabras (ver la nota especifica mas abajo). A 268 palabras ya no hay
+>> hueco para ella dentro de 0.4p. Si la quieres, o subimos la seccion a
+>> ~0.45p, o sale de otro sitio.
+>>
+>> UNA DECISION DE MAQUETACION QUE ES TUYA: las seis limitaciones en un solo
+>> parrafo con numeracion romana se leen densas. Como lista LaTeX real
+>> (itemize) se leerian mucho mejor, pero una itemize ocupa mas alto de
+>> pagina que el mismo texto en prosa corrida, que es justo lo que estamos
+>> racionando. Lo he dejado en prosa por eso, no por preferencia.
+
+>> sun2024massive NO se cita aqui, a proposito. Segun el plan (SPEC.md, Step
+>> 6.2) su sitio es la seccion 5 (Validation), como mecanismo de las
+>> "massive activations" que explica la discrepancia de h6. Citarlo tambien
+>> aqui duplicaria a coste de palabras que no sobran. Lo lei porque me lo
+>> pediste; mi recomendacion es dejarlo en la 5. Si lo quieres tambien aqui,
+>> dime y busco ~15 palabras.
+
+>> rasquinha2023metric: refs.bib registra una diferencia metodologica que no
+>> he metido por espacio. El paper original usa escalado PER-VECTOR; la
+>> reproduccion de este proyecto (Step 2.2, scripts/sanity_reproduce_2408.py)
+>> uso PER-TENSOR deliberadamente, de modo que la reproduccion es
+>> direccional-cualitativa, no una replicacion exacta -- y SPEC.md ya lo dice
+>> asi. Si esa reproduccion se menciona en algun sitio del paper, esta
+>> diferencia tiene que aparecer con ella. Aqui no la he puesto porque [6-P1]
+>> habla de la METODOLOGIA que se extiende, no de la reproduccion. Coste si
+>> la quieres: ~20 palabras.
+
+>> ACCION AL PASAR AL .TEX (no es texto del paper):
+>>   1. Con esta seccion escrita, el marcador [MOVED TO LIMITATIONS] de
+>>      [3.4-P3] en 03_method.txt ya tiene destino y debe BORRARSE al portar
+>>      Method. No puede acabar en el PDF.
+>>   2. Sigue en vigor la regla del bloque "PENDIENTE PARA LA SECCION 6" de
+>>      03_method.txt: el paper NO puede citar ningun NUMERO de FP8-E4M3,
+>>      FP8-E5M2 ni INT8 en ninguna seccion mientras las 72 celdas de
+>>      referencia no se ejecuten. El punto (i) de [6-P2] es la divulgacion
+>>      de ese hueco, no un permiso para llenarlo.
+>>   3. Si esas 72 celdas llegan a ejecutarse, el punto (i) se cae y hay que
+>>      devolver la mencion a Method en presente (ver el mismo bloque).
+
+>> NUMERACION DE METHOD: RESUELTO 2026-08-26, esta nota ya no aplica. Decia
+>> que no habia verificado el "Sections 3.3 and 4.1" del punto (v). Dos cosas
+>> han cambiado desde entonces:
+>>   1. El punto (v) ya NO cita ninguna seccion. Al ampliarlo con la
+>>      evidencia concreta, la referencia cruzada dejo de aportar y se quito.
+>>      Asi que esta seccion no depende de la numeracion de Method.
+>>   2. El desfase de etiquetas de 03_method.txt esta arreglado en el propio
+>>      .txt (las de Factorial design eran 3.5-Px y ahora son 3.4-Px; las de
+>>      Statistical protocol eran 3.6-Px y ahora son 3.5-Px). La unica
+>>      referencia que esta seccion le hace a Method es a [3.4-P3], mas
+>>      abajo, y ya esta actualizada.
+
+
+
+===============================================================================
+=== 7. CONCLUSION ===
+=== paper/drafts/07_conclusion.txt
+===============================================================================
+
+===============================================================================
+CONCLUSION  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/sections/07_conclusion.tex (ahora mismo NOT YET WRITTEN).
+Este .txt es la version editable. Cuando lo revises y lo modifiques, yo paso
+tus cambios al .tex; el .tex no se toca hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. No te preocupes por el formato.
+  - Cada parrafo lleva una etiqueta tipo [7-P2] a la izquierda. Puedes
+    referirte a ellas ("quita 7-P2", "en 7-P1 cambia X por Y") en vez de
+    reescribir el parrafo entero, si prefieres.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+    Se borran al pasar a LaTeX.
+
+ESTADO ACTUAL
+  - Longitud: 188 palabras (P1 88, P2 100), contra un objetivo de ~185
+    (0.25p x 745 palabras/pagina).
+  - Sin citas nuevas y sin numeros: ninguna cifra de Results se repite aqui.
+  - No compilado (el .tex sigue vacio a proposito).
+
+
+===============================================================================
+7. CONCLUSION
+===============================================================================
+
+
+[7-P1]
+Two design choices separate NVFP4 from MXFP4, and they do not contribute
+equally. Across the full grid of tail weights and contraction lengths, the
+scale format moves the measured backward error more than the block size does,
+at every canonical cell, and the ranking survives both secondary factors --
+stochastic rounding and the random Hadamard transform -- without reversing
+anywhere. The margin narrows at the heaviest tail without crossing. This is a
+post-hoc decomposition of measured magnitudes, not a preregistered test, and it
+involves no theoretical bound at any point.
+
+[7-P2]
+That last property is what the threshold analysis leaves behind. The
+constructed bound breaks across the whole tested range, so the tail index at
+which it first fails is undefined everywhere on this grid, and could not carry
+the planned comparison; that null motivated the pivot to comparing magnitudes
+directly, and does not bear on the decomposition, which never uses the bound.
+Two steps would sharpen the picture: executing the specified but unrun
+per-tensor reference cells, which would place both formats against a classical
+baseline, and an ablation separating the intra-block correlation mechanism from
+other contributors to the u_eff residual.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> "post-hoc decomposition ... not a preregistered test" en [7-P1]: no es un
+>> matiz que me haya inventado para la conclusion, es lo que dice [4.2-P1]
+>> ("This decomposition is exploratory and post-hoc, adopted under a dated
+>> preregistration amendment (sec 8.4)"). Lo he metido porque una conclusion
+>> que enuncie el hallazgo causal SIN ese calificativo lo deja mas fuerte de
+>> lo que Results aguanta, y este proyecto ha sido consistente en no hacer
+>> eso. Cuesta 14 palabras. Si te parece que en la conclusion sobra, se
+>> quita, pero entonces el lector se lleva la version fuerte.
+
+>> LA FRASE DE nu* HACE DOS COSAS A LA VEZ, a proposito. Dice que el nulo
+>> motivo el pivot Y que no toca al hallazgo causal, y el "which never uses
+>> the bound" es lo que conecta las dos: 4.2 se lee directamente de las
+>> magnitudes medidas, sin beta(n), sin c y sin ratio contra 1 ([4.2-P1]).
+>> Sin esa clausula, decir "no lo socava" seria una afirmacion sin apoyo
+>> visible en la propia conclusion.
+
+>> SIN NUMEROS, COMO PEDISTE. Ni las 40 celdas canonicas, ni el 34/38/35 de
+>> 40 de los factores secundarios, ni los rangos de effect_scale y
+>> effect_block, ni los ratios de 4.3. Todo eso vive en Results. El coste es
+>> que "at every canonical cell" y "without reversing anywhere" son
+>> afirmaciones fuertes sin cifra que las respalde en esta seccion; se
+>> apoyan en la Seccion 4.2, que es donde el lector acaba de estar.
+
+>> LAS 72 CELDAS: aqui las llamo "the specified but unrun per-tensor
+>> reference cells" sin dar el numero, por la regla de no repetir cifras.
+>> Ojo con la regla que sigue en vigor (bloque "PENDIENTE PARA LA SECCION 6"
+>> de 03_method.txt): el paper no puede citar ningun NUMERO de FP8-E4M3,
+>> FP8-E5M2 ni INT8 hasta que esas celdas se ejecuten. Nombrarlas como
+>> trabajo futuro no viola esa regla; darles resultados si.
+
+>> NO HE MENCIONADO la Seccion 5 (validacion con activaciones reales). No
+>> estaba en tu lista de contenidos para esta seccion y a 185 palabras no
+>> cabe sin quitar otra cosa. Si quieres que la conclusion cierre tambien
+>> ese arco, la frase mas barata seria una clausula dentro de [7-P1]
+>> (~15 palabras), y habria que recortar en [7-P2].
+
+
+

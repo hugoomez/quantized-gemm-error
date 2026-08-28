@@ -1,0 +1,89 @@
+===============================================================================
+ABSTRACT  --  borrador en texto plano para revision
+===============================================================================
+
+Destino: paper/main.tex, dentro de \begin{abstract}...\end{abstract}
+(ahora mismo el bloque no existe todavia). Este .txt es la version editable.
+Cuando lo revises y lo modifiques, yo lo paso al .tex; el .tex no se toca
+hasta entonces.
+
+COMO EDITAR
+  - Escribe directamente sobre el texto. Un solo parrafo, sin etiquetas:
+    es la convencion de abstract y no hace falta trocearlo.
+  - Las lineas que empiezan por >> son notas mias, NO son texto del paper.
+
+ESTADO ACTUAL
+  - Longitud: 195 palabras, dentro del objetivo de 150-200, con 5 de
+    margen. Historia: 199 en la primera version, 190 tras recortar
+    fraseo, 195 tras restaurar "on its own 8B model" el 2026-08-26.
+  - Sin citas, por convencion. La cifra de NVIDIA se atribuye en prosa.
+  - Ningun numero de Results salvo el 36% del gancho.
+  - No compilado.
+
+
+===============================================================================
+ABSTRACT
+===============================================================================
+
+NVIDIA reports that MXFP4 needs 36% more training tokens than NVFP4 to reach
+the same pretraining loss on its own 8B model, but the two formats differ in
+two ways at once,
+block size and scale format, so that result cannot say which choice is
+responsible. This work separates them. Backward error is measured on a
+quantized GEMM under exact accumulation, isolating input quantization from
+accumulator rounding, with the classical rounding-error framework adapted to
+formats whose grid is set per block rather than by the encoding. Block size
+and scale format are crossed in a two-by-two design and
+swept over operand tail weight and contraction length. The scale format moves
+measured error more than the block size does at every canonical cell, and the
+ranking survives stochastic rounding and a random Hadamard transform; the
+margin narrows sharply at the heaviest tail without crossing. The originally
+planned comparison, locating the tail index at which the derived bound first
+fails, proved uninformative: the bound is broken across the entire tested
+range, which motivated the magnitude-based analysis reported here. Against
+GPT-2 activations the predictions transfer closely at two of three layers,
+with the third traced to channel-concentrated outliers.
+
+
+===============================================================================
+NOTAS
+===============================================================================
+
+>> TU PREGUNTA SOBRE EL MATIZ POST-HOC: mi respuesta es que a nivel de
+>> abstract NO hace falta repetirlo, y no porque quepa omitirlo, sino porque
+>> la frase del bound YA lo dice en la practica. El abstract afirma que la
+>> comparacion planeada no sirvio y que "that outcome motivated the
+>> magnitude-based analysis reported here": eso es exactamente decir que el
+>> analisis que da el titular se adopto DESPUES, a la vista de que el
+>> planeado no funcionaba. Un lector no puede salir de ahi creyendo que la
+>> descomposicion 2x2 era el plan preregistrado. Si quitaras esa frase, el
+>> matiz si haria falta explicito; con ella, no. [4.2-P1] y [7-P1] lo dicen
+>> con todas las letras a nivel de cuerpo, que es donde toca.
+
+>> EL 36% ES EL UNICO NUMERO DE FUERA QUE ENTRA, y va atribuido en prosa
+>> ("NVIDIA reports that... on its own 8B model") porque en abstract no se
+>> citan claves. Eso cumple la regla de refs.bib ("never as independent
+>> fact") sin \citep: la frase dice de quien es el numero y sobre que modelo
+>> se midio. El "on its own 8B model" se restauro el 2026-08-26 para igualar
+>> el nivel de cautela de [1-P1], que dice "on its own 8B hybrid
+>> Mamba-Transformer model"; aqui va la version corta por espacio.
+
+>> "two of three layers" es el unico dato de la Seccion 5 que doy. No digo
+>> ni h6, ni el 23-38%, ni las cifras de concentracion de canal. La primera
+>> version decia "explained by channel-concentrated outliers"; el 2026-08-26
+>> se cambio a "traced to", que es la formulacion mas debil y la que encaja
+>> con lo que la Seccion 5 declara de verdad: mecanismo plausible y
+>> divulgado, NO probado, sin ablacion que aisle la estructura de canal.
+>> "Traced to" describe donde apunta la evidencia; "explained by" sonaba a
+>> causa establecida.
+
+>> LO QUE NO CABE EN 191 PALABRAS, por si lo echas de menos: el resultado de
+>> la Seccion 4.1 (el exponente -0.5 se recupera donde existen los momentos
+>> y no donde no), que es el otro hallazgo confirmatorio del paper. Lo he
+>> dejado fuera porque el encargo pedia el titular causal y el abstract ya
+>> lleva cinco movimientos. Entra en ~25 palabras si lo quieres, pero
+>> entonces hay que recortar en otro sitio para no pasar de 200.
+
+>> DESTINO EN EL .TEX: main.tex no tiene todavia bloque \begin{abstract}.
+>> Al portar hay que crearlo, entre \maketitle y \section{Introduction}.
+>> Lo mismo que con las secciones: no lo toco hasta que revises esto.

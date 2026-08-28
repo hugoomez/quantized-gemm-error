@@ -54,8 +54,8 @@ bound $\beta(n)$ and is discussed in Section~\ref{sec:results:threshold}.
 No configuration's interval contains $-0.5$; all 128 lie above it --- error
 decays with $n$, but slower than the cancellation regime predicts, and nowhere
 grows. That unanimity overstates the finding: it rests on a significance test
-that at 1000--5000 trials excludes $-0.5$ even when the point estimate misses by
-thousandths. By magnitude instead ($|\mathrm{slope} - (-0.5)| > 0.02$), 63 of 128
+that at 1000--5000 trials excludes $-0.5$ even when the point estimate misses it
+by a few thousandths. By magnitude instead ($|\mathrm{slope} - (-0.5)| > 0.02$), 63 of 128
 configurations deviate materially and 65 do not.
 
 The split is ordered by tail weight, and the deviation shrinks smoothly and
@@ -134,9 +134,9 @@ determines GEMM output accuracy, whereas $u_{\mathrm{eff}}$
 (Section~\ref{sec:method:bound}) is a per-element diagnostic. On $u_{\mathrm{eff}}$
 the block-size effect leads at $\nu = 1$ and crosses the scale effect by
 $\nu = 2$; in backward error the direction replicates but the crossing does not.
-With the backward-error effects near parity for $\nu \le 2$, the clean ``scale
-format dominates'' reading holds only at light-to-moderate tails, not the
-heaviest ones that motivate the study.
+With the backward-error margin narrowing sharply at $\nu = 1$, the clean ``scale
+format dominates'' reading holds cleanly except at the single heaviest tail
+examined.
 
 The two factors are not purely additive: the interaction term is significant at
 essentially every cell with $n \ge 64$, from $-0.095$ at $\nu = 1$ to $-0.028$ at

@@ -9,7 +9,7 @@ twelve transformer blocks --- h0, h6 and h11, the first, middle and last --- all
 at the attention input projection (\texttt{attn.c\_attn}), so that depth is the
 only thing varying across the three. Padded positions are removed before any
 statistic or GEMM operand sees them. Tail weight is excess kurtosis (Fisher's
-convention, Gaussian $= 0$), over the full flattened tensor.
+convention, Gaussian $= 0$), computed over the full flattened tensor.
 
 Each layer's $k$ maps to an equivalent tail index by $\nu = 4 + 6/k$, the inverse
 of a t-Student's $k = 6/(\nu - 4)$, defined only for $\nu > 4$; the out-of-domain
@@ -39,7 +39,7 @@ $34{,}390 \times 768$ tensor fall in exactly one channel, index 64, across twent
 distinct tokens. Within the top-1\% pool the same channel holds 13.0\% of
 the mass and appears for all 34,390 tokens, and the top ten channels hold
 75.3\%; per-channel maxima drop sharply after a handful (8.06, 7.08, 6.55, 5.31,
-then 2.76). This is
+then 2.76 for the next channel down). This is
 the massive-activations pattern documented in transformer hidden states
 \citep{sun2024massive}, and it violates an assumption the synthetic model makes
 implicitly: that large values are randomly located and redrawn every sample,

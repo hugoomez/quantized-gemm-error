@@ -126,11 +126,11 @@
   NVIDIA reports that MXFP4 needs 36\% more training tokens than NVFP4 to reach
   the same pretraining loss on its own 8B model, but the two formats differ in
   two ways at once, block size and scale format, so that result cannot say which
-  choice is responsible. This work separates them. Backward error is measured on
-  a quantized GEMM under exact accumulation, isolating input quantization from
-  accumulator rounding, within a backward-error framework in the tradition of
-  classical rounding-error analysis but adapted where that analysis no longer
-  applies under exact accumulation. Block size and
+  choice is responsible. This work separates them. Backward error of a quantized
+  GEMM is measured under exact accumulation, isolating input quantization from
+  accumulator rounding, within a framework in the tradition of classical
+  rounding-error analysis but adapted where that analysis no longer applies.
+  Block size and
   scale format are crossed in a two-by-two design and swept over operand tail
   weight and contraction length. The scale format moves measured error more than
   the block size does at every canonical cell, and the ranking survives

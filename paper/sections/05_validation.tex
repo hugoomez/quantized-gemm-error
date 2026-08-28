@@ -8,16 +8,13 @@ split, giving 34,390 valid tokens, and activations were captured at three of its
 twelve transformer blocks --- h0, h6 and h11, the first, middle and last --- all
 at the attention input projection (\texttt{attn.c\_attn}), so that depth is the
 only thing varying across the three. Padded positions are removed before any
-statistic or GEMM operand sees them. Tail weight is summarized by excess kurtosis
-in Fisher's convention, in which a Gaussian is 0 and not 3, computed over the
-full flattened tensor as a single distribution.
+statistic or GEMM operand sees them. Tail weight is excess kurtosis (Fisher's
+convention, Gaussian $= 0$), over the full flattened tensor.
 
-Each layer's excess kurtosis $k$ is mapped to an equivalent tail index through
-$\nu = 4 + 6/k$, the closed-form inverse of a t-Student's $k = 6/(\nu - 4)$,
-which is defined only for $\nu > 4$. The out-of-domain case is $k \le 0$, which
-no t-Student attains and which the code reports as N/A with a stated reason
-rather than extrapolating; it did not arise at any layer, though h6's
-$\nu = 4.06$ sits within 0.06 of the boundary. The quantized-GEMM pipeline of
+Each layer's $k$ maps to an equivalent tail index by $\nu = 4 + 6/k$, the inverse
+of a t-Student's $k = 6/(\nu - 4)$, defined only for $\nu > 4$; the out-of-domain
+case ($k \le 0$) did not arise at any layer, though h6's $\nu = 4.06$ sits within
+0.06 of the boundary. The quantized-GEMM pipeline of
 Section~\ref{sec:method:setup} is then run twice per layer and preset: once on
 the real activations, once on a synthetic t-Student($\nu$) draw of identical
 shape, rescaled so its median absolute deviation equals the real tensor's. The
@@ -39,10 +36,10 @@ concentrated h6's outlier mass is.
 A targeted diagnostic on h6's own tensor, with no GEMM rerun, locates that
 concentration. The twenty largest activation magnitudes in the entire
 $34{,}390 \times 768$ tensor fall in exactly one channel, index 64, across twenty
-distinct tokens. Within the top-1\% pool the same channel accounts for 13.0\% of
-the mass and appears for all 34,390 tokens, the five most frequent channels for
-58.2\%, and the top ten for 75.3\%; per-channel maxima drop sharply after a
-handful (8.06, 7.08, 6.55, 5.31, then 2.76 for the next channel down). This is
+distinct tokens. Within the top-1\% pool the same channel holds 13.0\% of
+the mass and appears for all 34,390 tokens, and the top ten channels hold
+75.3\%; per-channel maxima drop sharply after a handful (8.06, 7.08, 6.55, 5.31,
+then 2.76). This is
 the massive-activations pattern documented in transformer hidden states
 \citep{sun2024massive}, and it violates an assumption the synthetic model makes
 implicitly: that large values are randomly located and redrawn every sample,
@@ -58,6 +55,6 @@ claimed.
 
 This check is exploratory and bears on none of the confirmatory comparisons. It
 tests the study's modeling choice, not any hypothesis about the formats, and
-finds it sound across most of a real network --- failing only under extreme,
-channel-concentrated kurtosis, where a single kurtosis-matched $\nu$ is
-insufficient.
+finds it sound at two of the three layers tested in this one small model ---
+failing only under extreme, channel-concentrated kurtosis, where a single
+kurtosis-matched $\nu$ is insufficient.

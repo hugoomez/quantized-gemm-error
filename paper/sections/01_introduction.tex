@@ -7,18 +7,19 @@ model \citep{nvidia2026nvfp4}: the vendor's own figure, not independently
 established here, and the observation that motivates this work.
 
 What the figure cannot say is which design choice earns the difference. The two
-formats store identical E2M1 elements and differ in their scaling alone, but they
-differ in two ways at once: NVFP4 scales blocks of 16 elements with an E4M3 scale
-factor, MXFP4 blocks of 32 with a power-of-two E8M0 factor. Any gap measured
-between the two presets is therefore attributable to the block size, to the scale
-format, or to an interaction between them, with no way to tell which from the
-comparison itself.
+formats differ in their scaling in two ways at once: NVFP4 scales blocks of 16
+elements with an E4M3 factor, MXFP4 blocks of 32 with a power-of-two E8M0 factor.
+Any gap between the two presets is therefore attributable to block size, scale
+format, or their interaction, with no way to tell which from the comparison
+itself.
 
 This work separates them. Block size and scale format are crossed in a
 $2\times2$ factorial design, so either can be held fixed while the other varies.
-Accuracy is measured as the backward error of a quantized GEMM, using classical
-rounding-error analysis adapted to block-scaled formats (Section~\ref{sec:method}).
+Accuracy is measured as the backward error of a quantized GEMM, in the tradition
+of classical rounding-error analysis but adapted where that analysis does not
+apply under exact accumulation (Section~\ref{sec:method}).
 The design is swept over operand tail weight and contraction length, so the
-comparison rests on a grid of configurations rather than on a single measurement.
+comparison rests on a grid, not a single measurement.
 
-The scale format, not the block size, is found to be the dominant factor.
+The scale format, not the block size, is the dominant factor for this
+backward-error proxy.

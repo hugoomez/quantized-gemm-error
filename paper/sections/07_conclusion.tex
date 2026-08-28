@@ -1,12 +1,14 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-Two design choices separate NVFP4 from MXFP4, and they do not contribute equally.
-Across the full grid of tail weights and contraction lengths, the scale format
-moves the measured backward error more than the block size does, at every
-canonical cell, and the ranking survives both secondary factors --- stochastic
-rounding and the random Hadamard transform --- without reversing anywhere. The
-margin narrows at the heaviest tail without crossing. This is a post-hoc
+Two design choices separate NVFP4 from MXFP4, and move its backward-error proxy
+unequally. Across the full grid of tail weights
+and contraction lengths, the scale format moves the measured backward error more
+than the block size does, at every canonical cell, and the ranking survives both
+secondary factors --- stochastic rounding and the random Hadamard transform ---
+without reversing anywhere. The margin narrows at the heaviest tail without
+crossing. Whether that ordering carries over to training loss or the
+token-efficiency gap is untested. This is a post-hoc
 decomposition of measured magnitudes, not a preregistered test, and it involves
 no theoretical bound at any point.
 

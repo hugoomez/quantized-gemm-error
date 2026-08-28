@@ -18,19 +18,16 @@ The accuracy is assessed elementwise using the backward error
                               {\bigl(|A|\,|B|\bigr)_{ij}}
   \label{eq:be}
 \end{equation}
-In this case, $\hat{C}$ stands for the quantized product, and the absolute value
-operation is applied element by element. The denominator is calculated using the
-product of absolute values, not $|AB|$; the two differ when the exact product
-involves cancellation.
+Here $\hat{C}$ is the quantized product and $|\cdot|$ acts elementwise. The
+denominator uses the product of absolute values, not $|AB|$; the two differ when
+the exact product involves cancellation.
 
-The main approach accumulates the reconstructions exactly, in float64 --- a
-deliberate design choice. A low-precision GEMM has two kinds of error: errors in
-the operands snapped onto a coarse grid, and partial sums rounded in a narrow
-accumulator; combined, they obscure which one drives the measurement. Exact
-accumulation removes the second, so the residual $\hat{C} - AB$ in (\ref{eq:be})
-is input-quantization error alone. A bfloat16 accumulator is a secondary option,
-excluded from this grid's analysis and not included in the primary
-results.
+The main route accumulates the reconstructions exactly, in float64. A
+low-precision GEMM has two error sources --- operands snapped onto a coarse grid,
+and partial sums rounded in a narrow accumulator --- which combined obscure which
+one drives the measurement. Exact accumulation removes the second, so the
+residual $\hat{C} - AB$ in (\ref{eq:be}) is input-quantization error alone. A
+bfloat16 accumulator is a secondary option, not used in the primary results.
 
 Operands have i.i.d.\ t-Student($\nu$) entries --- smaller $\nu$ meaning heavier
 tails, $\nu \to \infty$ the Gaussian case --- each tensor normalized to unit
@@ -43,24 +40,22 @@ when $\nu$ is less than or equal to 2.
 The classical worst-case backward-error bound for a length-$n$ inner product is
 $\gamma_n = n\,u/(1-n\,u)$ under unit roundoff $u$ \citep{higham2002accuracy}.
 Two probabilistic results relax that leading factor, each a high-probability
-upper bound rather than a statement about typical growth. Higham and Mary replace
-$\gamma_n$ by a relaxed constant of order $\sqrt{n \log n}\,u$, holding with a
-probability bounded below, for rounding errors modelled as mean-independent
-random variables \citep{higham2019new}; Connolly, Higham and Mary prove a
-$\sqrt{n}\,u$ bound with no log factor, unconditionally, for stochastic rounding
-specifically \citep{connolly2021stochastic}. The two cover different rounding
-regimes rather than refining one another.
+upper bound rather than a statement about typical growth. Higham and Mary give a
+high-probability bound of order $\sqrt{n \log n}\,u$ for rounding errors modelled
+as mean-independent random variables \citep{higham2019new}; Connolly, Higham and
+Mary prove an unconditional $\sqrt{n}\,u$ bound (no log factor) specific to
+stochastic rounding \citep{connolly2021stochastic}. The two cover different
+rounding regimes rather than refining one another.
 
 The $n$-dependence of both families stems specifically from repeated rounding
 during accumulation: a single rounding occurs during every summation step,
 totaling $n$, either compounding in the worst case ($\gamma_n$) or behaving as a
 random walk ($\sqrt{n}\,u$). Exact accumulation removes that mechanism, so
-neither bound's $n$-dependence applies here. Additionally, a block-scaled format
-does not provide a fixed $u$ to replace: the classical unit roundoff is half an
-ulp based on a grid defined by the encoding, while here, the grid that an element
-occupies is determined by the largest magnitude in its own block, resulting in
-the achieved relative error being a distribution rather than an attribute of the
-format.
+neither bound's $n$-dependence applies here. A block-scaled format also provides
+no fixed $u$ to replace: classical unit roundoff is half an ulp on a grid fixed
+by the encoding, whereas here an element's grid is set by the largest magnitude
+in its block, so the achieved relative error is a distribution, not a property of
+the format.
 
 \subsection{A Measured Unit Roundoff, and the Constructed Bound}
 \label{sec:method:bound}
@@ -116,47 +111,38 @@ of (\ref{eq:bound}).
 The constant $c$ is predetermined at $c = 1$ for all supporting analyses, in
 accordance with the anti-circularity principle established in the preregistration
 of this study: a bound whose constant is fitted to the data it evaluates cannot
-be refuted by that same data. Adopting a unit leading constant is consistent with
-the tradition of probabilistic rounding analyses, which replace $n\,u$ with
-$\sqrt{n}\,u$ in a deterministic factor without introducing a fitted constant
-\citep{connolly2021stochastic}. Given that the calculation is order-of-magnitude
+be refuted by that same data. Given that the calculation is order-of-magnitude
 rather than tight, a poorly calibrated $c = 1$ serves as a reportable finding
 instead of justification for recalibration; any estimation of $\hat{c}$ derived
 from data is still descriptive and exploratory, not reintegrated into the
-confirmatory ratio.
+confirmatory ratio. The preregistration document, including all dated amendments,
+is provided as supplementary material.
 
 \looseness=-1 The bound is deemed broken at $(\mathrm{format}, \nu, n)$ when the
-lower limit of the 95\% bootstrap confidence interval of the median of
-$\mathrm{BE}/\beta(n)$ exceeds $1.0$: indicating when the error reduces at a rate
-that is notably slower than anticipated by the cancellation rate, rather than
-simply exceeding a growing worst-case limit. The fact that $u_{\mathrm{eff}}$ is a
-function of $\nu$ means that both sides of this ratio change as $\nu$ varies,
-testing whether the scaling law endures despite heavy tails, rather than
-evaluating whether heavy tails increase absolute error.
+lower limit of the 95\% bootstrap CI of the median $\mathrm{BE}/\beta(n)$ exceeds
+$1.0$ --- i.e.\ the error decays notably slower than the cancellation rate
+predicts, not merely exceeds a growing worst-case limit. Since $u_{\mathrm{eff}}$
+depends on $\nu$, both sides move with $\nu$: this tests whether the scaling law
+endures under heavy tails, not whether heavy tails raise absolute error.
 
 \subsection{Factorial design}
 \label{sec:method:design}
 
-Because MXFP4 and NVFP4 differ in block size and scale format at once, the design
-crosses the two factors --- block size in $\{16, 32\}$, scale format in
-$\{\mathrm{E8M0}, \mathrm{E4M3}\}$ --- so either can be held fixed while the other
-varies. This $2\times2$ setup is the main causal comparison. The element format
-is E2M1 everywhere, since both real formats use it, so scaling is the only thing
-that changes. The per-tensor global scale comes from the scale format rather than
-being varied separately. E8M0 covers 255 binades and can reach any block's
-magnitude on its own, while E4M3 covers about 19 and overflows to NaN when one is
-not provided. This project rounds the MXFP4 block-scale
+The design crosses block size $\{16, 32\}$ with scale format
+$\{\mathrm{E8M0}, \mathrm{E4M3}\}$; this $2\times2$ is the main causal comparison.
+The element format is E2M1 throughout, as in both real formats, so only the
+scaling changes, and the per-tensor global scale follows from the scale format
+rather than being varied separately. E8M0 reaches any block's magnitude on its
+own; E4M3's $\sim$19 binades overflow to NaN without the per-tensor global scale. This project rounds the MXFP4 block-scale
 exponent up rather than down (OCP/microxcaling's default), matching NVIDIA's own
 stated training practice \citep{nvidia2026nvfp4} and verified bit-exact against
 microxcaling in this project's own testing.
 
-Two of the four combinations are real formats. Block 32 with an E8M0 scale is
-MXFP4, and block 16 with an E4M3 scale is NVFP4. The other two, block 16 with
-E8M0 and block 32 with E4M3, are experimental controls. They do not correspond to
-any hardware, specification, or vendor format, and exist only as measurement
-tools to make the comparison between the two real formats clear. This paper does
-not propose, endorse, or benchmark them as formats, and the results tables keep
-this distinction clear.
+Two of the four combinations are real formats: block 32 / E8M0 is MXFP4,
+block 16 / E4M3 is NVFP4. The other two (block 16 / E8M0, block 32 / E4M3) have
+no hardware or vendor counterpart; they are measurement tools to isolate each
+factor, not formats this paper proposes or benchmarks. The results tables mark
+the distinction.
 
 Rounding mode (either round-to-nearest-even or stochastic) and a random Hadamard
 transform (on or off) are secondary factors and are not part of the main causal
@@ -168,12 +154,11 @@ These four factors are combined with the tail index, which runs over
 $\nu \in \{1, 2, 3, 5, 8, 15, 30\}$ together with the Gaussian limit, and with
 the contraction dimension $n \in \{16, 64, 256, 1024, 4096\}$, creating a grid of
 $8 \times 5 \times 2^4 = 640$ cells, all using exact accumulation. The primary
-contraction dimension is $n = 4096$. It was not fixed in advance: it was declared
-post hoc in a dated preregistration amendment, filed before any confirmatory
-$\nu^\star$ analysis was run but after the sweep itself and its $n$-scaling slope
-fits were already complete, on the stated grounds that 4096 is closest to real
-GEMM shapes in language-model workloads and is the $n$ at which the
-$\sqrt{n}$-decay derivation's asymptotic assumptions are most likely to be valid.
+contraction dimension is $n = 4096$, not fixed in advance: it was declared in a
+dated preregistration amendment --- after the sweep and its $n$-scaling slope
+fits, before any confirmatory $\nu^\star$ analysis --- on the stated grounds that
+4096 is closest to real language-model GEMM shapes and is where the
+$\sqrt{n}$-decay derivation's asymptotic assumptions are most likely valid.
 The remaining four values are used as stability checks, reported as a separate
 sensitivity table and never substituted for it. Trial counts are adaptive. There
 are $5000$ trials per cell at $\nu \in \{1, 2, 3\}$, where quantile estimates are
@@ -191,18 +176,12 @@ intervals use the percentile bootstrap, with $B = 10{,}000$ resamples and an
 explicitly seeded generator, and are reported as computed rather than forced to
 be symmetric.
 
-\looseness=-1 The median and 90th percentile carry all confirmatory statistical
-weight. The 99th percentile is reported for every cell but is only indicative, at
-any trial count used here. The reason is a measured coverage gap, not a generic
-caveat about percentile bootstraps. A cell's $p_{99}$ is determined by roughly
-its top 1\% of values (10 out of 1000 trials, 50 out of 5000), and a percentile
-bootstrap resamples with replacement from the observed sample, so it can reweight
-those values but can never produce a value more extreme than the largest already
-drawn. A coverage simulation measures this: 1000 simulated experiments per cell,
-t-Student($\nu = 2$), both trial budgets, nominal 95\%. Median coverage is 95.5\%
-at 1000 trials and 94.8\% at 5000, which is close to nominal at both. The
-$p_{99}$ coverage is 92.7\% and 94.0\%, which is below the median's at both
-budgets and about 3.5 standard errors less than nominal at 1000 trials. The gap
-is real and in the direction the mechanism forecasts, but modest, not a collapse.
-More trials help $p_{99}$ measurably without closing it --- hence the
-indicative-only status at every trial count.
+\looseness=-1 The median carries all confirmatory statistical weight. The 99th
+percentile is reported for every cell but is only indicative, at any trial count
+used here. The $p_{99}$ indicative-only status rests on a measured
+bootstrap-coverage gap, not a generic caveat about percentile bootstraps (see
+supplementary material for the coverage simulation and exact figures). A cell's
+$p_{99}$ rests on its top $\sim$1\% of values (10 of 1000 trials, 50 of 5000),
+and a percentile bootstrap can reweight those but never exceed the largest value
+already drawn. The gap is real and in the predicted direction but modest; more
+trials help $p_{99}$ without closing it.

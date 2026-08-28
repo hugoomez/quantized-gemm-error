@@ -4,14 +4,17 @@
 \subsection{The Scaling Mechanism, Confirmed Where Its Assumptions Hold}
 \label{sec:results:scaling}
 
-% Figures are numbered strictly by first-citation order: n_scaling (Fig. 1,
-% Sec. 4.1), causal_heatmap (Fig. 2, Sec. 4.2), nu_star (Fig. 3, Sec. 4.3).
-% n_scaling and nu_star share a width and are laid out here as one physical
-% two-up row -- two separately numbered captions in a single float. Figure 2
-% (causal_heatmap, full width) is defined later, in Sec. 4.2; its number is
-% reserved here by advancing the figure counter between the two captions
-% below, and reclaimed at that later float. No \listoffigures in this
-% document, so nothing depends on the counter being monotone in source order.
+``Confirmed'' and ``confirmatory'' here mean tested against a pre-fixed criterion
+with $c$ pinned a priori, not a preregistered hypothesis that passed --- the
+preregistered $\nu^\star$ hypothesis was undefined on this grid
+(Section~\ref{sec:results:threshold}).
+
+% n_scaling and nu_star share a width and are laid out as one physical two-up
+% row -- two separately numbered captions in a single float. Figure 2
+% (causal_heatmap, Sec. 4.2) is defined later; its number is reserved here by
+% advancing the figure counter between the two captions below, and reclaimed at
+% that later float. No \listoffigures, so nothing depends on the counter being
+% monotone in source order.
 \begin{figure}[t]
   \centering
   \begin{minipage}[t]{0.38\textwidth}
@@ -31,7 +34,8 @@
     \caption{Median $\mathrm{BE}/\beta(n)$ at $n_{\mathrm{primary}} = 4096$
       versus tail index for all four block-size $\times$ scale-format arms;
       every curve sits above the ratio-$1$ threshold across the whole range, by
-      $20$--$30\times$ at $\nu = 1$ and $\sim$50--60\% at the Gaussian limit.}
+      roughly $20$--$32\times$ at $\nu = 1$ and $\sim$50--60\% at the Gaussian
+      limit.}
     \label{fig:nu_star}
   \end{minipage}
 \end{figure}
@@ -42,17 +46,17 @@ sweep --- $8$ tail indices $\times$ $2$ block sizes $\times$ $2$ scale formats
 $\times$ $2$ rounding modes $\times$ $2$ Hadamard settings --- over that
 configuration's own 5 values of $n$, with a 95\% interval from 2000 bootstrap
 replicates resampling each $n$'s trials independently. The reference is the
-exponent $-0.5$ of (\ref{eq:bound}).
+exponent $-0.5$ of (\ref{eq:bound}). Figure~\ref{fig:n_scaling} plots measured
+$\mathrm{median}(\mathrm{BE})$ against $n$ for the two named presets; its
+companion, Figure~\ref{fig:nu_star}, plots the same arms' error relative to the
+bound $\beta(n)$ and is discussed in Section~\ref{sec:results:threshold}.
 
-No configuration's interval contains $-0.5$. All 128 lie entirely above it: the
-error decays with $n$, but more slowly than the cancellation regime predicts.
-None decays faster, and none has a positive slope, so error grows with $n$
-nowhere in the grid. That unanimity alone overstates the finding, however. It
-rests on a significance test, and at 1000--5000 trials per cell the intervals
-exclude $-0.5$ even when the point estimate misses it by a few thousandths.
-Splitting by magnitude instead, at $|\mathrm{slope} - (-0.5)| > 0.02$, separates
-the two readings: 63 of the 128 configurations deviate materially from $-0.5$,
-and 65 do not.
+No configuration's interval contains $-0.5$; all 128 lie above it --- error
+decays with $n$, but slower than the cancellation regime predicts, and nowhere
+grows. That unanimity overstates the finding: it rests on a significance test
+that at 1000--5000 trials excludes $-0.5$ even when the point estimate misses by
+thousandths. By magnitude instead ($|\mathrm{slope} - (-0.5)| > 0.02$), 63 of 128
+configurations deviate materially and 65 do not.
 
 The split is ordered by tail weight, and the deviation shrinks smoothly and
 monotonically as the tail lightens. At $\nu \in \{1, 2, 3\}$ every one of the 16
@@ -64,23 +68,20 @@ some below, consistent with a smooth transition rather than a sharp cutoff. At
 $\nu \in \{15, 30, \mathrm{Gaussian}\}$ none is material at any configuration, the
 gap staying between 0.004 and 0.020.
 
-The split follows the derivation's own premises.
-Section~\ref{sec:method:bound} obtained the $-0.5$ exponent from a mean-zero
-numerator behaving like a random walk and a denominator obeying a law of large
-numbers --- both resting on moments the heaviest tails here lack; at
-$\nu = 1$ the t-Student is Cauchy, with neither finite mean nor variance. The
-exponent is recovered to within two hundredths exactly where those moments exist,
-and departs from it exactly where they do not (Figure~\ref{fig:n_scaling}).
+The split follows the derivation's premises: the $-0.5$ exponent
+(Section~\ref{sec:method:bound}) needs a mean-zero numerator behaving as a random
+walk and a denominator obeying a law of large numbers --- moments the heaviest
+tails lack ($\nu = 1$ is Cauchy). It is recovered to within 0.02 where those
+moments exist and departs where they do not (Figure~\ref{fig:n_scaling}).
 
 \subsection{Scale Format, Not Block Size, Is the Larger Lever}
 \label{sec:results:decomposition}
 
 The $2\times2$ design is read directly off the measured backward error, with no
-theoretical bound involved at any point: no $\beta(n)$, no $c$, no ratio to $1$.
-This partition is exploratory and post-hoc, adopted under a dated preregistration
-amendment (Sec.\ 8.4) once the preregistered confirmatory comparison --- P1--P3
-of Sec.\ 4, all framed in terms of $\nu^\star$ --- was left undefined by the
-finding of Section~\ref{sec:results:threshold}. For each combination of tail
+theoretical bound involved. This partition is exploratory and post-hoc, adopted
+under a dated preregistration amendment (Sec.\ 8.4) once the preregistered
+$\nu^\star$ comparison (P1--P3) was left undefined by the finding of
+Section~\ref{sec:results:threshold}. For each combination of tail
 index, contraction dimension, rounding mode and Hadamard setting, three
 statistics are formed in log space,
 \[
@@ -102,8 +103,10 @@ rounding, and 35 of 40 with both, never reversing to an overall block-size
 majority in any of the four combinations. At $n = 4096$, canonically,
 $\mathrm{effect}_{\mathrm{scale}}$ ranges from $-0.162$ at the Gaussian end to
 $-0.389$ at $\nu = 2$, against $-0.042$ to $-0.246$ for
-$\mathrm{effect}_{\mathrm{block}}$: a pull two to four times larger across the
-grid (Figure~\ref{fig:causal_heatmap}). Both effects are negative at every
+$\mathrm{effect}_{\mathrm{block}}$ (Figure~\ref{fig:causal_heatmap}): the
+scale-format effect is about $3.9\times$ the block-size effect near the Gaussian
+end, falling to roughly $2\times$ at $\nu = 2$ and about $1.1\times$ at
+$\nu = 1$, where the two intervals still do not overlap (below). Both effects are negative at every
 $n \ge 64$, so block $= 16$ and E4M3 --- NVFP4's two choices --- each reduce
 measured error relative to their alternatives, and the larger of the two
 reductions is the scale format.
@@ -118,37 +121,38 @@ block size 16 does. The effect first becomes measurable at $n = 64$, where the
 two arms are genuinely different quantizers, and is essentially flat through
 $n = 4096$ (at $\nu = 1$: $-0.286, -0.270, -0.257, -0.246$).
 
-The margin between the two factors is not uniform, and it is thinnest at the
-heaviest tail. Written as
-$|\mathrm{effect}_{\mathrm{scale}}| - |\mathrm{effect}_{\mathrm{block}}|$, it is
-0.016 to 0.043 at $\nu = 1$ for $n \ge 64$, against 0.124 to 0.135 at
-$\nu = 15$ --- a four- to eightfold narrowing --- and the narrowing is confined
-to $\nu = 1$, since at $\nu = 2$ the margin is 0.16 to 0.19, the widest of the
-three tail indices examined. The margin narrows sharply at $\nu = 1$ but does not
-cross. Point estimates never flip at any of the 40 canonical cells, and at
-$n = 4096$ the intervals do not overlap:
+The margin $|\mathrm{effect}_{\mathrm{scale}}| - |\mathrm{effect}_{\mathrm{block}}|$
+is thinnest at $\nu = 1$ (0.016 to 0.043 for $n \ge 64$) and wider on either side
+--- 0.16 to 0.19 at $\nu = 2$, 0.124 to 0.135 at $\nu = 15$ --- but never
+crosses: no point estimate flips at any of the 40 canonical cells, and at
+$n = 4096$ the intervals are disjoint,
 $|\mathrm{effect}_{\mathrm{block}}| \in [0.2395, 0.2510]$ against
 $|\mathrm{effect}_{\mathrm{scale}}| \in [0.2719, 0.2831]$.
 
-This only partly fits the per-element picture. On $u_{\mathrm{eff}}$ (the
-$2\times2$ applied to elementwise rather than end-to-end error), the block-size
-effect leads at $\nu = 1$ and the two cross by $\nu = 2$; in backward error the
-direction replicates but the crossing does not, the scale-format lead narrowing
-toward $\nu = 1$ without reversing.
+Backward error, not $u_{\mathrm{eff}}$, carries the headline comparison: it
+determines GEMM output accuracy, whereas $u_{\mathrm{eff}}$
+(Section~\ref{sec:method:bound}) is a per-element diagnostic. On $u_{\mathrm{eff}}$
+the block-size effect leads at $\nu = 1$ and crosses the scale effect by
+$\nu = 2$; in backward error the direction replicates but the crossing does not.
+With the backward-error effects near parity for $\nu \le 2$, the clean ``scale
+format dominates'' reading holds only at light-to-moderate tails, not the
+heaviest ones that motivate the study.
 
 The two factors are not purely additive: the interaction term is significant at
 essentially every cell with $n \ge 64$, from $-0.095$ at $\nu = 1$ to $-0.028$ at
-the Gaussian end at $n = 4096$. It is not folded into the dominance comparison
-above, which uses the pooled marginal effects.
+the Gaussian end at $n = 4096$. The dominance comparison above uses the pooled
+marginal effects; at $\nu = 1$ the interaction is about a third of either main
+effect, so that comparison is a simplification, not an exact partition.
 
 \begin{figure}[t]
   \centering
   \addtocounter{figure}{-2}% reclaim the number reserved in the Sec. 4.1 two-up
-  \includegraphics[width=0.82\textwidth]{figures/figure3_causal_heatmap}
+  \includegraphics[width=0.66\textwidth]{figures/figure3_causal_heatmap}
   \caption{$\mathrm{median}(\mathrm{BE})$ over the block size $\times$ tail
     index grid at fixed $n = 4096$, split by scale format (E8M0 vs.\ E4M3);
     changing the scale format shifts the cells more than changing the block
-    size at every $\nu$.}
+    size at every $\nu$, though by a margin that narrows sharply toward the
+    heaviest tail ($\nu = 1$).}
   \label{fig:causal_heatmap}
   \addtocounter{figure}{1}% restore counter past the two-up's Fig. 3
 \end{figure}

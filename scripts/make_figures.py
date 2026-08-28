@@ -17,7 +17,7 @@ which changes only when the matplotlib version changes.
 
 All three figures below deviate from the project's original figure
 roadmap, because the confirmatory analysis (Step 4.2) found a different
-result than anticipated: the bound `cota(n)` breaks at every tested nu,
+result than anticipated: the bound `beta(n)` breaks at every tested nu,
 so nu* is undefined everywhere and the figures instead report what Step
 4.2 actually found (a uniformly-broken bound of varying margin) and what
 Step 4.3's exploratory follow-up found in its place (scale_format, not
@@ -191,7 +191,7 @@ def make_figure_1(nu_star_detail_path: Path, nu_star_config_path: Path, out_dir:
     ax.set_xticks(x)
     ax.set_xticklabels(NU_TICK_LABELS)
     ax.set_xlabel("ν (heavier tail ←  ·  → lighter tail; axis: -1/√ν)")
-    ax.set_ylabel(f"median(BE) / cota(n) at n={n_primary} (log scale)")
+    ax.set_ylabel(f"median(BE) / β(n) at n={n_primary} (log scale)")
     ax.set_title("Backward error vs. theoretical bound\n(canonical sub-config)")
     ax.legend(loc="upper right", framealpha=0.9, borderpad=0.4, labelspacing=0.3)
     fig.tight_layout()
@@ -377,7 +377,7 @@ def make_figure_3(
                 ax.text(
                     j + 0.5,
                     i + 0.5,
-                    f"{value_grids[scale_format][i, j]:.2g}",
+                    f"{value_grids[scale_format][i, j]:.3g}",
                     ha="center",
                     va="center",
                     rotation=90,
@@ -394,7 +394,7 @@ def make_figure_3(
 
     fig.suptitle(
         f"median(BE) by ν and block_size, n={n_primary}, canonical sub-config\n"
-        f"causal decomposition (Step 4.3, EXPLORATORY): scale format dominates block size "
+        f"causal decomposition (Section 4.2, exploratory): scale format dominates block size "
         f"in {n_scale_dominant}/{n_total} canonical cells at this n",
         fontsize=6.8,
         y=0.985,

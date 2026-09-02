@@ -1,116 +1,50 @@
 % =====================================================================
-% main.tex -- paper scaffold, content only, NOT compiled locally.
+% main.tex -- Transactions on Machine Learning Research (TMLR) submission.
 %
-% *** READ BEFORE COMPILING OR SUBMITTING ***
+% Ported 2026-09-02 from the NeurIPS "New in ML" workshop format to the
+% TMLR journal format after the workshop desk-rejected the submission on
+% the 8-page body limit. TMLR has no page limit.
 %
-% Preamble below was independently verified against the real template
-% this session fetched directly: https://www.overleaf.com/latex/
-% templates/formatting-instructions-for-neurips-2026/bjdwqfdkyftc
-% (fetched and cross-checked twice on 2026-08-24). This is NOT a claim
-% taken on trust from a supplied paste -- the previous paste for this
-% same content (in an earlier request) contained real defects, found
-% and fixed here rather than carried forward:
-%   - `\usepackate{nicefrac}` -- typo for `\usepackage`; would fail to
-%     compile ("Undefined control sequence").
-%   - `\title{% TODO: ...}` with the TODO comment INSIDE the braces --
-%     `%` consumes to end-of-line INCLUDING the newline, so this does
-%     NOT leave the title blank; it silently sets `\title` to whatever
-%     text sits on the following line before the closing brace. Fixed
-%     below by moving the TODO to its own comment line above `\title{}`.
-%   - The pasted author placeholder ("Anonymous Author(s) / Affiliation
-%     / Address / email") does not match the real template's own
-%     instructional placeholder ("David S.~Hippocampus, Dept. of
-%     Computer Science, Cranberry-Lemon University, ..."). Kept
-%     "Anonymous Author(s)" anyway, deliberately: that placeholder text
-%     is the double-blind SUBMISSION convention overriding the
-%     instructional demo text, not a template fact -- noted explicitly
-%     here rather than conflated with the verified parts below.
-%   - `\usepackage{natbib}` was NOT added as a separate line: the fetch
-%     confirms `neurips_2026.sty` loads natbib itself; adding it again
-%     risks a "package already loaded with different options" clash.
-%   - `\usepackage{graphicx}` WAS added, even though it is not part of
-%     the base template's own preamble (confirmed absent there) --
-%     `paper/figures/` already holds Step 5's PDFs, so this paper will
-%     need it regardless. Flagged here as an addition, not template
-%     content.
-%   - `\bibliographystyle{plainnat}` / `\bibliography{refs}` are not
-%     shown verbatim in the template's own instructional body (which
-%     only demonstrates manually-typeset example references) but are
-%     the standard pairing given natbib is loaded -- kept as a
-%     reasonable default, not claimed as literally template-verbatim.
-%
-% What is still NOT resolved, per this project's own explicit
-% instruction not to fetch or fabricate it:
-%   - The actual `neurips_2026.sty` class FILE this preamble depends on
-%     to compile is still not present anywhere in this repository.
-%     Compilation and page-count checks happen on Overleaf, where the
-%     .sty is supplied by the official project/template sync, not here.
-%   - `\input{checklist.tex}` (NeurIPS's mandatory paper checklist) is
-%     confirmed required by the real template (present in the fetch
-%     above) and is listed below, commented out with a TODO -- see the
-%     note directly above that line. No placeholder checklist.tex has
-%     been created: it is part of the same official author kit as the
-%     .sty, subject to the same "don't fabricate it locally" rule, and
-%     unlike a missing .sty, an incomplete or invented checklist would
-%     misrepresent substantive answers (reproducibility, ethics,
-%     broader impact) rather than just fail to compile.
+% Style files (tmlr.sty, tmlr.bst, fancyhdr.sty) are the current versions
+% from https://github.com/JmlrOrg/tmlr-style-file and live in paper/.
+% `\usepackage{tmlr}` with no options = anonymous double-blind submission
+% (author block is auto-hidden; it prints "Anonymous authors / Paper
+% under double-blind review"). At camera-ready switch to
+% `\usepackage[accepted]{tmlr}` and set \month/\year/\openreview.
 % =====================================================================
 
-\documentclass{article}
+\documentclass[10pt]{article}
 
-% Track/anonymity option -- confirmed valid: the real template lists
-% `dblblindworkshop` among several commented-out track choices
-% (alongside main, position, eandd, creativeai, sglblindworkshop,
-% education). This project is a double-blind NewInML workshop
-% submission via OpenReview, per the workshop's own CFP.
-\usepackage[dblblindworkshop]{neurips_2026}
+\usepackage{tmlr}
 
 \usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{booktabs}
 \usepackage{amsfonts}
-\usepackage{nicefrac}
 \usepackage{microtype}
-\usepackage{xcolor}
-\usepackage{graphicx} % added -- not in the base template, but this paper needs figures; see header note
-\usepackage{subcaption} % added per request -- pulls in caption; neurips_2026.sty loads no caption/float package, so no clash (verified on recompile). Not currently used (all three Results figures are independent standalone floats); kept loaded, safe to drop if no sub-figures are needed.
-
-% Cosmetic: trim ~2--3pt from the LaTeX-default display-math skips (not set by
-% neurips_2026.sty -- not a venue style parameter). Reclaims a little vertical
-% space around the ~5 display equations. Font size, margins, and heading spacing
-% untouched.
-\setlength{\abovedisplayskip}{7pt plus 2pt minus 4pt}
-\setlength{\belowdisplayskip}{7pt plus 2pt minus 4pt}
-\setlength{\abovedisplayshortskip}{0pt plus 2pt}
-\setlength{\belowdisplayshortskip}{4pt plus 2pt minus 2pt}
-
-\workshoptitle{New in ML at NeurIPS 2026}
+\usepackage{graphicx}
 
 % Title finalized 2026-08-28 (author decision) to the candidate below.
 %
 % Chosen 2026-08-28 over "Which Design Choice Explains NVFP4's Edge over
 % MXFP4? A Backward-Error Decomposition". Even as a question, "Explains
 % NVFP4's Edge" presupposes (a) an established edge and (b) that this
-% paper explains it -- both now explicitly disclaimed in the text: the
+% paper explains it -- both explicitly disclaimed in the text: the
 % 36%-more-tokens gap is framed throughout as NVIDIA's own vendor figure
 % (Intro, Background), and limitation (vii) plus the Intro/Conclusion
 % hedges state that this work measures a backward-error proxy with no
-% established link to the training-loss/token-efficiency outcome. The new
-% candidate names only what the paper does: decompose the MXFP4/NVFP4
-% backward-error comparison into its two crossed factors. Earlier history:
-% the pre-2026-08-26 candidate "Isolating the Design Choice Behind NVFP4's
-% Advantage over MXFP4" asserted the advantage outright. SPEC.md's
-% "Paper writing plan (Step 6.2)" section should carry the same change.
+% established link to the training-loss/token-efficiency outcome. The
+% chosen title names only what the paper does: decompose the MXFP4/NVFP4
+% backward-error comparison into its two crossed factors.
 \title{Block Size or Scale Format? A Backward-Error Decomposition of
   MXFP4 and NVFP4}
 
-% Double-blind submission: anonymous author block. Real names/affiliations
-% only at camera-ready, never before. Left empty pending that decision --
-% not the template's own "David S.~Hippocampus" instructional placeholder,
-% which is demo text for the formatting guide itself, not submission text.
-\author{}
+% Anonymous double-blind submission: this block is not rendered while
+% `tmlr` is loaded without [accepted]/[preprint]. Real names/affiliations
+% only at camera-ready.
+\author{\name Anonymous \email anon@example.com \\
+  \addr Anonymous Institution}
 
 \begin{document}
 
@@ -146,20 +80,7 @@
 \input{sections/06_related_work}
 \input{sections/07_conclusion}
 
-\begin{ack}
-  % TODO -- funding/competing-interests disclosure, final version only.
-\end{ack}
-
-\bibliographystyle{plainnat}
+\bibliographystyle{tmlr}
 \bibliography{refs}
-
-% NeurIPS's mandatory paper checklist. checklist.tex now exists in this
-% repository (supplied 2026-08-24 from the official author kit, same
-% source/sync as neurips_2026.sty), so this is wired in -- not
-% fabricated: the file's own content is untouched by this project, only
-% \input here. Its answers (reproducibility, ethics, broader impact)
-% still need to be actually filled in as paper content is written; this
-% \input alone does not answer them.
-\input{checklist.tex}
 
 \end{document}
